@@ -1,14 +1,152 @@
+#!/usr/bin/python3
+
 import numpy as np
 import torch
+from torch import Tensor
 import librosa
 from torch.utils.data import Dataset, DataLoader
 import scipy.io as sio
 import pickle
 import os
+import librosa
 from torch.utils.data.dataloader import default_collate
-import pandas as pd
+import warnings
+from typing import Any, Tuple, Union
+from pathlib import Path
+from utils import download_url, extract_archive, walk_files
 
 torch.set_default_tensor_type(torch.FloatTensor)
+URL = "https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip"
+FOLDER_IN_ARCHIVE = "VCTK-Corpus"
+_CHECKSUMS = {
+    "https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip": "8a6ba2946b36fcbef0212cad601f4bfa"
+}
+
+SampleType = Tuple[Tensor, int, str, str, str]
+
+def torchaudio_load(filepath):
+    wave, sr = librosa.load(filepath, sr=None)
+    waveform = torch.Tensor(wave)
+    return [waveform, sr]
+
+class VCTK_092(Dataset):
+    """Create VCTK 0.92 Dataset
+    Args:
+        root (str): Root directory where the dataset's top level directory is found.
+        mic_id (str): Microphone ID. Either ``"mic1"`` or ``"mic2"``. (default: ``"mic2"``)
+        download (bool, optional):
+            Whether to download the dataset if it is not found at root path. (default: ``False``).
+        url (str, optional): The URL to download the dataset from.
+            (default: ``"https://datashare.is.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip"``)
+        audio_ext (str, optional): Custom audio extension if dataset is converted to non-default audio format.
+    Note:
+        * All the speeches from speaker ``p315`` will be skipped due to the lack of the corresponding text files.
+        * All the speeches from ``p280`` will be skipped for ``mic_id="mic2"`` due to the lack of the audio files.
+        * Some of the speeches from speaker ``p362`` will be skipped due to the lack of  the audio files.
+        * See Also: https://datashare.is.ed.ac.uk/handle/10283/3443
+    """
+
+    def __init__(
+        self,
+        root: str,
+        mic_id: str = "mic2",
+        download: bool = False,
+        url: str = URL,
+        audio_ext=".flac",
+    ):
+        if mic_id not in ["mic1", "mic2"]:
+            raise RuntimeError(
+                f'`mic_id` has to be either "mic1" or "mic2". Found: {mic_id}'
+            )
+
+        archive = os.path.join(root, "VCTK-Corpus-0.92.zip")
+
+        self._path = os.path.join(root, "VCTK-Corpus-0.92")
+        self._txt_dir = os.path.join(self._path, "txt")
+        self._audio_dir = os.path.join(self._path, "wav48_silence_trimmed")
+        self._mic_id = mic_id
+        self._audio_ext = audio_ext
+
+        if download:
+            if not os.path.isdir(self._path):
+                if not os.path.isfile(archive):
+                    checksum = _CHECKSUMS.get(url, None)
+                    download_url(url, root, hash_value=checksum, hash_type="md5")
+                extract_archive(archive, self._path)
+
+        if not os.path.isdir(self._path):
+            raise RuntimeError(
+                "Dataset not found. Please use `download=True` to download it."
+            )
+
+        # Extracting speaker IDs from the folder structure
+        self._speaker_ids = sorted(os.listdir(self._txt_dir))
+        self._sample_ids = []
+
+        """
+        Due to some insufficient data complexity in the 0.92 version of this dataset,
+        we start traversing the audio folder structure in accordance with the text folder.
+        As some of the audio files are missing of either ``mic_1`` or ``mic_2`` but the
+        text is present for the same, we first check for the existence of the audio file
+        before adding it to the ``sample_ids`` list.
+        Once the ``audio_ids`` are loaded into memory we can quickly access the list for
+        different parameters required by the user.
+        """
+        for speaker_id in self._speaker_ids:
+            if speaker_id == "p280" and mic_id == "mic2":
+                continue
+            utterance_dir = os.path.join(self._txt_dir, speaker_id)
+            for utterance_file in sorted(
+                f for f in os.listdir(utterance_dir) if f.endswith(".txt")
+            ):
+                utterance_id = os.path.splitext(utterance_file)[0]
+                audio_path_mic = os.path.join(
+                    self._audio_dir,
+                    speaker_id,
+                    f"{utterance_id}_{mic_id}{self._audio_ext}",
+                )
+                if speaker_id == "p362" and not os.path.isfile(audio_path_mic):
+                    continue
+                self._sample_ids.append(utterance_id.split("_"))
+
+    def _load_text(self, file_path) -> str:
+        with open(file_path) as file_path:
+            return file_path.readlines()[0]
+
+    def _load_audio(self, file_path) -> Tuple[Tensor, int]:
+        return torchaudio_load(file_path)
+
+    def _load_sample(self, speaker_id: str, utterance_id: str, mic_id: str) -> SampleType:
+        utterance_path = os.path.join(
+            self._txt_dir, speaker_id, f"{speaker_id}_{utterance_id}.txt"
+        )
+        audio_path = os.path.join(
+            self._audio_dir,
+            speaker_id,
+            f"{speaker_id}_{utterance_id}_{mic_id}{self._audio_ext}",
+        )
+
+        # Reading text
+        utterance = self._load_text(utterance_path)
+
+        # Reading FLAC
+        waveform, sample_rate = self._load_audio(audio_path)
+
+        return (waveform, sample_rate, utterance, speaker_id, utterance_id)
+
+    def __getitem__(self, n: int) -> SampleType:
+        """Load the n-th sample from the dataset.
+        Args:
+            n (int): The index of the sample to be loaded
+        Returns:
+            tuple: ``(waveform, sample_rate, utterance, speaker_id, utterance_id)``
+        """
+        speaker_id, utterance_id = self._sample_ids[n]
+        return self._load_sample(speaker_id, utterance_id, self._mic_id)
+
+    def __len__(self) -> int:
+        return len(self._sample_ids)
+
 
 class ASVspoof2019(Dataset):
     def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC',
@@ -87,41 +225,6 @@ class ASVspoof2019(Dataset):
 
     def collate_fn(self, samples):
         return default_collate(samples)
-        # if self.pad_chop:
-        #     feat_mat_lst, audio_fn_lst, tag_lst, label_lst = [], [], [], []
-        #     for sample in samples:
-        #         feat_mat, audio_fn, tag, label = sample
-        #         if feat_mat.shape[1] % self.feat_len < self.feat_len * 0.5:
-        #             num_of_items = feat_mat.shape[1] // self.feat_len
-        #             for i in range(num_of_items):
-        #                 feat_mat_lst.append(feat_mat[:, self.feat_len * i: self.feat_len * (i + 1)])
-        #                 audio_fn_lst.append(audio_fn)
-        #                 tag_lst.append(tag)
-        #                 label_lst.append(label)
-        #         else:
-        #             num_of_items = feat_mat.shape[1] // self.feat_len + 1
-        #             for i in range(num_of_items - 1):
-        #                 feat_mat_lst.append(feat_mat[:, self.feat_len * i: self.feat_len * (i + 1)])
-        #                 audio_fn_lst.append(audio_fn)
-        #                 tag_lst.append(tag)
-        #                 label_lst.append(label)
-        #             feat_mat_lst.append(padding(feat_mat[:, self.feat_len * (num_of_items - 1):], self.feat_len))
-        #             audio_fn_lst.append(audio_fn)
-        #             tag_lst.append(tag)
-        #             label_lst.append(label)
-        #
-        #     return default_collate(feat_mat_lst), default_collate(audio_fn_lst), \
-        #            default_collate(tag_lst), default_collate(label_lst)
-        # else:
-        #     feat_mat = [sample[0].transpose(0, 1) for sample in samples]
-        #     from torch.nn.utils.rnn import pad_sequence
-        #     feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
-        #     audio_fn = [sample[1] for sample in samples]
-        #     tag = [sample[2] for sample in samples]
-        #     label = [sample[3] for sample in samples]
-        #
-        #     return feat_mat, default_collate(audio_fn), default_collate(tag), default_collate(label)
-
 
 def padding(spec, ref_len):
     width, cur_len = spec.shape
@@ -135,11 +238,12 @@ def repeat_padding(spec, ref_len):
     return spec
 
 
+
 if __name__ == "__main__":
     path_to_database = '/data/neil/DS_10283_3336/'  # if run on GPU
-    path_to_features = '/dataNVME/neil/ASVspoof2019Features/'  # if run on GPU
+    path_to_features = '/dataNVME/neil/ASVspoof2019LAFeatures/'  # if run on GPU
     path_to_protocol = '/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/'
-    training_set = ASVspoof2019(path_to_database, path_to_features, path_to_protocol, genuine_only=False, pad_chop=False, feature='Melspec', feat_len=320)
+    training_set = ASVspoof2019("LA", path_to_database, path_to_features, path_to_protocol, genuine_only=False, pad_chop=False, feature='LFCC', feat_len=320)
     feat_mat, audio_fn, tag, label = training_set[2999]
     print(len(training_set))
     print(audio_fn)
@@ -165,3 +269,13 @@ if __name__ == "__main__":
     feat_mat_batch, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
     print(feat_mat_batch.shape)
     # print(feat_mat_batch)
+
+    vctk = VCTK_092(root="/data/neil/VCTK", download=False)
+    print(len(vctk))
+    waveform, sample_rate, utterance, speaker_id, utterance_id = vctk[124]
+    print(waveform.shape)
+    print(sample_rate)
+    print(utterance)
+    print(speaker_id)
+    print(utterance_id)
+
