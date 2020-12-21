@@ -25,8 +25,8 @@ _CHECKSUMS = {
 SampleType = Tuple[Tensor, int, str, str, str]
 
 def torchaudio_load(filepath):
-    wave, sr = librosa.load(filepath, sr=None)
-    waveform = torch.Tensor(wave)
+    wave, sr = librosa.load(filepath, sr=16000)
+    waveform = torch.Tensor(np.expand_dims(wave, axis=0))
     return [waveform, sr]
 
 class VCTK_092(Dataset):
