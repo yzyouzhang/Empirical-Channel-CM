@@ -5,9 +5,8 @@ import os
 import json
 import shutil
 import numpy as np
-import model as model_
-from resnet import ResNet
-from dataset import ASVspoof2019
+from model import ResNet
+from dataset import ASVspoof2019, LibriGenuine
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from loss import *
@@ -32,6 +31,11 @@ def initParams():
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
                         default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
+    parser.add_argument("-e", "--path_to_external", type=str, help="external data for training",
+                        default="/dataNVME/neil/libriSpeech/")
+
+    parser.add_argument("--alpha", type=float, default=0.3,
+                        help="ASVspoof ratio in a training batch, the other should be external genuine speech")
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
@@ -48,7 +52,7 @@ def initParams():
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
-    parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
+    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
     parser.add_argument('--interval', type=int, default=10, help="interval to decay lr")
 
@@ -82,12 +86,7 @@ def initParams():
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     # Set seeds
-    os.environ['PYTHONHASHSEED'] = str(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
-    torch.backends.cudnn.deterministic = True
+    setup_seed(args.seed)
 
     if args.test_only or args.continue_training:
         pass
@@ -134,6 +133,13 @@ def adjust_learning_rate(args, optimizer, epoch_num):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+def shuffle(cqcc, tags, labels):
+    shuffle_index = torch.randperm(labels.shape[0])
+    cqcc = cqcc[shuffle_index]
+    tags = tags[shuffle_index]
+    labels = labels[shuffle_index]
+    return cqcc, tags, labels
+
 def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
 
@@ -141,10 +147,8 @@ def train(args):
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
-    elif args.model == 'cnn':
-        node_dict = {"CQCC": 10, "Melspec": 15}
-        cqcc_model = model_.CQCC_ConvNet(2, node_dict[args.feat], args.enc_dim, subband_attention=True).to(args.device)
-
+    elif args.model == 'lcnn':
+        pass
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
     cqcc_model = nn.DataParallel(cqcc_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
@@ -157,13 +161,19 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, genuine_only=True)
     validation_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
+    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.alpha), shuffle=True, num_workers=args.num_workers,
                                  collate_fn=training_set.collate_fn)
     genuine_trainDataLoader = DataLoader(genuine_trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=genuine_trainset.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                collate_fn=validation_set.collate_fn)
 
+    libri_set = LibriGenuine(args.path_to_external, feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    libriDataLoader_train = DataLoader(libri_set[:80000], batch_size=args.batch_size - int(args.batch_size * args.alpha), shuffle=True, num_workers=args.num_workers,
+                            collate_fn=libri_set.collate_fn)
+    libriDataLoader_dev = DataLoader(libri_set[80000:], batch_size=args.batch_size - int(args.batch_size * args.alpha),
+                                       shuffle=True, num_workers=args.num_workers,
+                                       collate_fn=libri_set.collate_fn)
     test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, "eval",
                             args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
@@ -213,26 +223,13 @@ def train(args):
         ang_iso.train()
         ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
-    if args.add_loss == "multi_isolate":
-        multi_iso_loss = MultiIsolateCenterLoss(args.enc_dim, args.num_centers, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
-        if args.continue_training:
-            multi_iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
-        multi_iso_loss.train()
-        multi_iso_optimzer = torch.optim.SGD(multi_iso_loss.parameters(), lr=0.01)
-
-    if args.add_loss == "multicenter_isolate":
-        centers = torch.randn((3, args.enc_dim)) * 10
-        centers = centers.to(args.device)
-        if args.pre_train:
-            cqcc_model, cqcc_optimizer = pre_train(args, trainDataLoader, cqcc_model, cqcc_optimizer)
-            centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model)
-
     early_stop_cnt = 0
     prev_loss = 1e8
     if args.add_loss is None:
         monitor_loss = 'base_loss'
     else:
         monitor_loss = args.add_loss
+
     for epoch_num in tqdm(range(args.num_epochs)):
         genuine_feats, ip1_loader, tag_loader, idx_loader = [], [], [], []
         cqcc_model.train()
@@ -248,11 +245,20 @@ def train(args):
         # with trange(2) as t:
         # with trange(len(trainDataLoader)) as t:
         #     for i in t:
+        add_size = args.batch_size - int(args.batch_size * args.alpha)
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.unsqueeze(1).float().to(args.device)
+
+            featTensor, _, _ = next(iter(libriDataLoader_train))
+            cqcc = torch.cat((cqcc, featTensor.transpose(2,3)), 0)
+            tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
+            labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
+
             tags = tags.to(args.device)
             labels = labels.to(args.device)
+
+            cqcc, tags, labels = shuffle(cqcc, tags, labels)
 
             feats, cqcc_outputs = cqcc_model(cqcc)
 
@@ -391,8 +397,16 @@ def train(args):
             for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 cqcc = cqcc.unsqueeze(1).float().to(args.device)
+
+                featTensor, _, _ = next(iter(libriDataLoader_dev))
+                cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
+                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
+                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
+
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
+
+                cqcc, tags, labels = shuffle(cqcc, tags, labels)
 
                 feats, cqcc_outputs = cqcc_model(cqcc)
 

@@ -290,7 +290,7 @@ class LCNN(nn.Module):
         x = self.conv9(x)
         print(x.shape)
         x = self.out(x)
-        torch.flatten(hidden_features, 1)
+        # torch.flatten(hidden_features, 1)
 
         # x = self.activation(self.bn5(x)).squeeze(2)
 

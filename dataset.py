@@ -319,16 +319,16 @@ class LibriGenuine(Dataset):
 
     def __getitem__(self, idx):
         filepath = self.all_files[idx]
-        featureTensor = torch.load(filepath)
+        featureTensor = torch.load(filepath)[:, 1:, :]
         this_feat_len = featureTensor.shape[1]
         if this_feat_len > self.feat_len:
             startp = np.random.randint(this_feat_len-self.feat_len)
             featureTensor = featureTensor[:, startp:startp+self.feat_len, :]
         if this_feat_len < self.feat_len:
             if self.padding == 'zero':
-                feat_mat = padding(featureTensor, self.feat_len)
+                featureTensor = padding_Tensor(featureTensor, self.feat_len)
             elif self.padding == 'repeat':
-                feat_mat = repeat_padding(featureTensor, self.feat_len)
+                featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
             else:
                 raise ValueError('Padding should be zero or repeat!')
 
@@ -344,9 +344,20 @@ def padding(spec, ref_len):
     padd_len = ref_len - cur_len
     return torch.cat((spec, torch.zeros(width, padd_len, dtype=spec.dtype)), 1)
 
+def padding_Tensor(spec, ref_len):
+    _, cur_len, width = spec.shape
+    assert ref_len > cur_len
+    padd_len = ref_len - cur_len
+    return torch.cat((spec, torch.zeros((1, padd_len, width), dtype=spec.dtype)), 1)
+
 def repeat_padding(spec, ref_len):
     mul = int(np.ceil(ref_len / spec.shape[1]))
     spec = spec.repeat(1, mul)[:, :ref_len]
+    return spec
+
+def repeat_padding_Tensor(spec, ref_len):
+    mul = int(np.ceil(ref_len / spec.shape[1]))
+    spec = spec.repeat(1, mul, 1)[:, :ref_len, :]
     return spec
 
 
@@ -405,6 +416,19 @@ if __name__ == "__main__":
     libriGen = LibriGenuine("/dataNVME/neil/libriSpeech/", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat')
     print(len(libriGen))
     featTensor, tag, label = libriGen[123]
+    print(featTensor.shape)
+    print(tag)
+    print(label)
+
+    libriDataLoader = DataLoader(libriGen, batch_size=4, shuffle=True, num_workers=4,
+                                 collate_fn=libriGen.collate_fn)
+    featTensor, tag, label = next(iter(libriDataLoader))
+    print(featTensor[0])
+    print(featTensor.shape)
+    print(tag)
+    print(label)
+    featTensor, tag, label = next(iter(libriDataLoader))
+    print(featTensor[0])
     print(featTensor.shape)
     print(tag)
     print(label)

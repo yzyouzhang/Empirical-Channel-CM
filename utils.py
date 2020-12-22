@@ -9,6 +9,8 @@ import torch
 import urllib
 import urllib.request
 from torch.utils.model_zoo import tqdm
+import random
+import numpy as np
 
 ## Adapted from https://github.com/pytorch/audio/tree/master/torchaudio
 ## https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/blob/newfunctions/
@@ -29,15 +31,15 @@ def setup_seed(random_seed, cudnn_deterministic=True):
     """
 
     # initialization
-    torch.manual_seed(random_seed)
+    # torch.manual_seed(random_seed)
     random.seed(random_seed)
     np.random.seed(random_seed)
     os.environ['PYTHONHASHSEED'] = str(random_seed)
 
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(random_seed)
-        torch.backends.cudnn.deterministic = cudnn_deterministic
-        torch.backends.cudnn.benchmark = False
+    # if torch.cuda.is_available():
+    #     torch.cuda.manual_seed_all(random_seed)
+    #     torch.backends.cudnn.deterministic = cudnn_deterministic
+    #     torch.backends.cudnn.benchmark = False
 
 
 def stream_url(url: str,
