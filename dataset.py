@@ -225,7 +225,7 @@ class VCTK_092(Dataset):
 
 
 class ASVspoof2019(Dataset):
-    def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='CQCC',
+    def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='LFCC',
                  genuine_only=False, feat_len=650, pad_chop=True, padding='zero'):
         super(ASVspoof2019, self).__init__()
         self.access_type = access_type
@@ -304,7 +304,7 @@ class ASVspoof2019(Dataset):
         return default_collate(samples)
 
 class LibriGenuine(Dataset):
-    def __init__(self, path_to_features, feature='LFCC', feat_len=750, pad_chop=True, padding='repeat'):
+    def __init__(self, path_to_features, part='train', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat'):
         super(LibriGenuine, self).__init__()
         self.ptf = path_to_features
         self.feat_len = feat_len
@@ -313,7 +313,12 @@ class LibriGenuine(Dataset):
         self.padding = padding
 
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
-
+        if part == 'train':
+            self.all_files = self.all_files[:80000]
+        elif part == 'dev':
+            self.all_files = self.all_files[80000:]
+        else:
+            raise ValueError("Genuine speech should be added only in train or dev set!")
     def __len__(self):
         return len(self.all_files)
 

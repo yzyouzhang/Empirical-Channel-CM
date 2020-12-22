@@ -34,7 +34,7 @@ def initParams():
     parser.add_argument("-e", "--path_to_external", type=str, help="external data for training",
                         default="/dataNVME/neil/libriSpeech/")
 
-    parser.add_argument("--alpha", type=float, default=0.3,
+    parser.add_argument("--ratio", type=float, default=0.3,
                         help="ASVspoof ratio in a training batch, the other should be external genuine speech")
 
     # Dataset prepare
@@ -161,19 +161,22 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, genuine_only=True)
     validation_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.alpha), shuffle=True, num_workers=args.num_workers,
+    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers,
                                  collate_fn=training_set.collate_fn)
     genuine_trainDataLoader = DataLoader(genuine_trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                  collate_fn=genuine_trainset.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                collate_fn=validation_set.collate_fn)
 
-    libri_set = LibriGenuine(args.path_to_external, feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    libriDataLoader_train = DataLoader(libri_set[:80000], batch_size=args.batch_size - int(args.batch_size * args.alpha), shuffle=True, num_workers=args.num_workers,
-                            collate_fn=libri_set.collate_fn)
-    libriDataLoader_dev = DataLoader(libri_set[80000:], batch_size=args.batch_size - int(args.batch_size * args.alpha),
+    libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len,
+                                   pad_chop=args.pad_chop, padding=args.padding)
+
+    libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)), shuffle=True, num_workers=args.num_workers,
+                            collate_fn=libri_set_train.collate_fn)
+    libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
                                        shuffle=True, num_workers=args.num_workers,
-                                       collate_fn=libri_set.collate_fn)
+                                       collate_fn=libri_set_dev.collate_fn)
     test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, "eval",
                             args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
@@ -225,6 +228,8 @@ def train(args):
 
     early_stop_cnt = 0
     prev_loss = 1e8
+    add_size = args.batch_size - int(args.batch_size * args.ratio)
+
     if args.add_loss is None:
         monitor_loss = 'base_loss'
     else:
@@ -245,7 +250,7 @@ def train(args):
         # with trange(2) as t:
         # with trange(len(trainDataLoader)) as t:
         #     for i in t:
-        add_size = args.batch_size - int(args.batch_size * args.alpha)
+
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.unsqueeze(1).float().to(args.device)
