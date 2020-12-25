@@ -27,7 +27,7 @@ def initParams():
     parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
     parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
-                        default='/dataNVME/neil/ASVspoof2019LAFeatures/')
+                        default='/dataNVME/neil/ASVspoof2019LA/')
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
                         default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
@@ -41,7 +41,6 @@ def initParams():
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
                         choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
-    parser.add_argument('--pad_chop', type=bool, default=False, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat'],
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
@@ -155,32 +154,23 @@ def train(args):
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
-    training_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
-                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    genuine_trainset = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'train',
-                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, genuine_only=True)
-    validation_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, 'dev',
-                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers,
-                                 collate_fn=training_set.collate_fn)
-    genuine_trainDataLoader = DataLoader(genuine_trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                                 collate_fn=genuine_trainset.collate_fn)
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
-                               collate_fn=validation_set.collate_fn)
+    training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
+                                args.feat, feat_len=args.feat_len, padding=args.padding)
+    validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
+                                  args.feat, feat_len=args.feat_len, padding=args.padding)
+    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len,
-                                   pad_chop=args.pad_chop, padding=args.padding)
+    libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
+    libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
 
     libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)), shuffle=True, num_workers=args.num_workers,
                             collate_fn=libri_set_train.collate_fn)
     libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
                                        shuffle=True, num_workers=args.num_workers,
                                        collate_fn=libri_set_dev.collate_fn)
-    test_set = ASVspoof2019(args.access_type, args.path_to_database, args.path_to_features, args.path_to_protocol, "eval",
-                            args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers,
-                                collate_fn=test_set.collate_fn)
+    test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, padding=args.padding)
+    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
     feat, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
@@ -253,7 +243,7 @@ def train(args):
 
         for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
-            cqcc = cqcc.unsqueeze(1).float().to(args.device)
+            cqcc = cqcc.transpose(2,3).to(args.device)
 
             featTensor, _, _ = next(iter(libriDataLoader_train))
             cqcc = torch.cat((cqcc, featTensor.transpose(2,3)), 0)
@@ -311,26 +301,6 @@ def train(args):
                 cqcc_optimizer.step()
                 ang_iso_optimzer.step()
 
-            if args.add_loss == "multi_isolate":
-                multi_isoloss = multi_iso_loss(feats, labels)
-                cqcc_loss = multi_isoloss * args.weight_loss
-                cqcc_optimizer.zero_grad()
-                multi_iso_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(multi_isoloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                multi_iso_optimzer.step()
-
-            if args.add_loss == "multicenter_isolate":
-                multicenter_iso_loss = MultiCenterIsolateLoss(centers, 2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(
-                    args.device)
-                multiisoloss = multicenter_iso_loss(feats, labels)
-                cqcc_loss = multiisoloss * args.weight_loss
-                cqcc_optimizer.zero_grad()
-                trainlossDict[args.add_loss].append(multiisoloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-
             if args.add_loss == "lgm":
                 outputs, moutputs, likelihood = lgm_loss(feats, labels)
                 cqcc_loss = criterion(moutputs, labels)
@@ -369,10 +339,7 @@ def train(args):
 
             with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
                 log.write(str(epoch_num) + "\t" + str(i) + "\t" +
-                          str(np.nanmean(trainlossDict[monitor_loss])) + "\n")
-
-        if args.add_loss == "multicenter_isolate":
-            centers = seek_centers_kmeans(args, 3, genuine_trainDataLoader, cqcc_model)
+                          str(trainlossDict[monitor_loss][-1]) + "\n")
 
         if args.visualize and ((epoch_num+1) % 3 == 1):
             feat = torch.cat(ip1_loader, 0)
@@ -401,7 +368,7 @@ def train(args):
             #     for i in v:
             for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
-                cqcc = cqcc.unsqueeze(1).float().to(args.device)
+                cqcc = cqcc.transpose(2,3).to(args.device)
 
                 featTensor, _, _ = next(iter(libriDataLoader_dev))
                 cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
@@ -442,12 +409,6 @@ def train(args):
                 elif args.add_loss == "ang_iso":
                     ang_isoloss, score = ang_iso(feats, labels)
                     devlossDict[args.add_loss].append(ang_isoloss.item())
-                elif args.add_loss == "multi_isolate":
-                    multi_isoloss = multi_iso_loss(feats, labels)
-                    devlossDict[args.add_loss].append(multi_isoloss.item())
-                elif args.add_loss == "multicenter_isolate":
-                    multiisoloss = multicenter_iso_loss(feats, labels)
-                    devlossDict[args.add_loss].append(multiisoloss.item())
 
                 score_loader.append(score)
 
@@ -484,7 +445,7 @@ def train(args):
         with torch.no_grad():
             ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
             for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
-                cqcc = cqcc.unsqueeze(1).float().to(args.device)
+                cqcc = cqcc.transpose(2,3).to(args.device)
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
 
