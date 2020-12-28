@@ -31,15 +31,27 @@ device = torch.device("cuda" if cuda else "cpu")
 #     torch.save(lfccOfWav, os.path.join(target_dir, "%d_%s_%s_%s.pt" %(idx, speaker_id, chapter_id, utterance_id)))
 # print("Done!")
 
-for part_ in ["dev", "eval"]:
-    asvspoof_raw = dataset.ASVspoof2019Raw("LA", "/data/neil/DS_10283_3336/", "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part=part_)
-    target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA", part_, "LFCC")
-    lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
-    lfcc = lfcc.to(device)
-    for idx in range(len(asvspoof_raw)):
-        print("Processing", idx)
-        waveform, filename, tag, label = asvspoof_raw[idx]
-        waveform = waveform.to(device)
-        lfccOfWav = lfcc(waveform)
-        torch.save(lfccOfWav, os.path.join(target_dir, "%d_%s_%s_%s.pt" % (idx, filename, tag, label)))
-    print("Done!")
+# for part_ in ["train", "dev", "eval"]:
+#     asvspoof_raw = dataset.ASVspoof2019Raw("LA", "/data/neil/DS_10283_3336/", "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part=part_)
+#     target_dir = os.path.join("/dataNVME/neil/ASVspoof2019LA", part_, "LFCC")
+#     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+#     lfcc = lfcc.to(device)
+#     for idx in range(len(asvspoof_raw)):
+#         print("Processing", idx)
+#         waveform, filename, tag, label = asvspoof_raw[idx]
+#         waveform = waveform.to(device)
+#         lfccOfWav = lfcc(waveform)
+#         torch.save(lfccOfWav, os.path.join(target_dir, "%d_%s_%s_%s.pt" % (idx, filename, tag, label)))
+#     print("Done!")
+
+libritts = dataset.LIBRITTS(root="/data/neil")
+target_dir = "/dataNVME/neil/libriTTS/LFCC"
+lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+lfcc = lfcc.to(device)
+for idx in range(len(libritts)):
+    print("Processing", idx)
+    waveform, sample_rate, text, normed_text, speaker_id, chapter_id, utterance_id = libritts[idx]
+    waveform = waveform.to(device)
+    lfccOfWav = lfcc(waveform)
+    torch.save(lfccOfWav, os.path.join(target_dir, "%d_%s_%s_%s.pt" %(idx, speaker_id, chapter_id, utterance_id)))
+print("Done!")

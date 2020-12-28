@@ -105,6 +105,138 @@ class LIBRISPEECH(Dataset):
         return len(self._walker)
 
 
+def load_libritts_item(
+    fileid: str,
+    path: str,
+    ext_audio: str,
+    ext_original_txt: str,
+    ext_normalized_txt: str,
+) -> Tuple[Tensor, int, str, str, int, int, str]:
+    speaker_id, chapter_id, segment_id, utterance_id = fileid.split("_")
+    utterance_id = fileid
+
+    normalized_text = utterance_id + ext_normalized_txt
+    normalized_text = os.path.join(path, speaker_id, chapter_id, normalized_text)
+
+    original_text = utterance_id + ext_original_txt
+    original_text = os.path.join(path, speaker_id, chapter_id, original_text)
+
+    file_audio = utterance_id + ext_audio
+    file_audio = os.path.join(path, speaker_id, chapter_id, file_audio)
+
+    # Load audio
+    waveform, sample_rate = torchaudio_load(file_audio)
+
+    # Load original text
+    with open(original_text) as ft:
+        original_text = ft.readline()
+
+    # Load normalized text
+    with open(normalized_text, "r") as ft:
+        normalized_text = ft.readline()
+
+    return (
+        waveform,
+        sample_rate,
+        original_text,
+        normalized_text,
+        int(speaker_id),
+        int(chapter_id),
+        utterance_id,
+    )
+
+
+class LIBRITTS(Dataset):
+    """Create a Dataset for LibriTTS.
+    Args:
+        root (str or Path): Path to the directory where the dataset is found or downloaded.
+        url (str, optional): The URL to download the dataset from,
+            or the type of the dataset to dowload.
+            Allowed type values are ``"dev-clean"``, ``"dev-other"``, ``"test-clean"``,
+            ``"test-other"``, ``"train-clean-100"``, ``"train-clean-360"`` and
+            ``"train-other-500"``. (default: ``"train-clean-100"``)
+        folder_in_archive (str, optional):
+            The top-level directory of the dataset. (default: ``"LibriTTS"``)
+        download (bool, optional):
+            Whether to download the dataset if it is not found at root path. (default: ``False``).
+    """
+
+    _ext_original_txt = ".original.txt"
+    _ext_normalized_txt = ".normalized.txt"
+    _ext_audio = ".wav"
+
+    def __init__(
+        self,
+        root: Union[str, Path],
+        url: str = "train-clean-360",
+        folder_in_archive: str = "LibriTTS",
+        download: bool = False) -> None:
+
+        if url in [
+            "dev-clean",
+            "dev-other",
+            "test-clean",
+            "test-other",
+            "train-clean-100",
+            "train-clean-360",
+            "train-other-500",
+        ]:
+
+            ext_archive = ".tar.gz"
+            base_url = "http://www.openslr.org/resources/60/"
+
+            url = os.path.join(base_url, url + ext_archive)
+
+        # Get string representation of 'root' in case Path object is passed
+        root = os.fspath(root)
+        _CHECKSUMS = {
+            "http://www.openslr.org/60/dev-clean.tar.gz": "0c3076c1e5245bb3f0af7d82087ee207",
+            "http://www.openslr.org/60/dev-other.tar.gz": "815555d8d75995782ac3ccd7f047213d",
+            "http://www.openslr.org/60/test-clean.tar.gz": "7bed3bdb047c4c197f1ad3bc412db59f",
+            "http://www.openslr.org/60/test-other.tar.gz": "ae3258249472a13b5abef2a816f733e4",
+            "http://www.openslr.org/60/train-clean-100.tar.gz": "4a8c202b78fe1bc0c47916a98f3a2ea8",
+            "http://www.openslr.org/60/train-clean-360.tar.gz": "a84ef10ddade5fd25df69596a2767b2d",
+            "http://www.openslr.org/60/train-other-500.tar.gz": "7b181dd5ace343a5f38427999684aa6f",
+        }
+
+        basename = os.path.basename(url)
+        archive = os.path.join(root, basename)
+
+        basename = basename.split(".")[0]
+        folder_in_archive = os.path.join(folder_in_archive, basename)
+
+        self._path = os.path.join(root, folder_in_archive)
+
+        if download:
+            if not os.path.isdir(self._path):
+                if not os.path.isfile(archive):
+                    checksum = _CHECKSUMS.get(url, None)
+                    download_url(url, root, hash_value=checksum)
+                extract_archive(archive)
+
+        self._walker = sorted(str(p.stem) for p in Path(self._path).glob('*/*/*' + self._ext_audio))
+
+    def __getitem__(self, n: int) -> Tuple[Tensor, int, str, str, int, int, str]:
+        """Load the n-th sample from the dataset.
+        Args:
+            n (int): The index of the sample to be loaded
+        Returns:
+            tuple: ``(waveform, sample_rate, original_text, normalized_text, speaker_id,
+            chapter_id, utterance_id)``
+        """
+        fileid = self._walker[n]
+        return load_libritts_item(
+            fileid,
+            self._path,
+            self._ext_audio,
+            self._ext_original_txt,
+            self._ext_normalized_txt,
+        )
+
+    def __len__(self) -> int:
+        return len(self._walker)
+
+
 class VCTK_092(Dataset):
     """Create VCTK 0.92 Dataset
     Args:
@@ -263,86 +395,6 @@ class ASVspoof2019Raw(Dataset):
 
     def collate_fn(self, samples):
         return default_collate(samples)
-
-
-# class ASVspoof2019(Dataset):
-#     def __init__(self, access_type, path_to_database, path_to_features, path_to_protocol, part='train', feature='LFCC',
-#                  genuine_only=False, feat_len=650, pad_chop=True, padding='zero'):
-#         super(ASVspoof2019, self).__init__()
-#         self.access_type = access_type
-#         self.ptd = path_to_database
-#         self.path_to_features = path_to_features
-#         self.part = part
-#         self.ptf = os.path.join(path_to_features, self.part)
-#         self.path_to_audio = os.path.join(self.ptd, access_type, 'ASVspoof2019_'+access_type+'_'+ self.part +'/flac/')
-#         self.genuine_only = genuine_only
-#         self.feat_len = feat_len
-#         self.feature = feature
-#         self.pad_chop = pad_chop
-#         self.path_to_protocol = path_to_protocol
-#         self.padding = padding
-#         protocol = os.path.join(self.path_to_protocol, 'ASVspoof2019.'+access_type+'.cm.'+ self.part + '.trl.txt')
-#         if self.part == "eval":
-#             protocol = os.path.join(self.ptd, access_type, 'ASVspoof2019_' + access_type +
-#                                     '_cm_protocols/ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
-#         if self.access_type == 'LA':
-#             self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
-#                       "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
-#                       "A19": 19}
-#         else:
-#             self.tag = {"-": 0, "AA": 1, "AB": 2, "AC": 3, "BA": 4, "BB": 5, "BC": 6, "CA": 7, "CB": 8, "CC": 9}
-#         self.label = {"spoof": 1, "bonafide": 0}
-#
-#         # # would not work if change data split but this csv is only for feat_len
-#         # self.csv = pd.read_csv(self.ptf + "Set_csv.csv")
-#
-#         with open(protocol, 'r') as f:
-#             audio_info = [info.strip().split() for info in f.readlines()]
-#             if genuine_only:
-#                 assert self.part in ["train", "dev"]
-#                 if self.access_type == "LA":
-#                     num_bonafide = {"train": 2580, "dev": 2548}
-#                     self.all_info = audio_info[:num_bonafide[self.part]]
-#                 else:
-#                     self.all_info = audio_info[:5400]
-#             else:
-#                 self.all_info = audio_info
-#
-#     def __len__(self):
-#         return len(self.all_info)
-#
-#     def __getitem__(self, idx):
-#         speaker, filename, _, tag, label = self.all_info[idx]
-#         try:
-#             with open(self.ptf + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
-#                 feat_mat = pickle.load(feature_handle)
-#         except:
-#             # add this exception statement since we may change the data split
-#             def the_other(train_or_dev):
-#                 assert train_or_dev in ["train", "dev"]
-#                 res = "dev" if train_or_dev == "train" else "train"
-#                 return res
-#             with open(os.path.join(self.path_to_features, the_other(self.part)) + '/'+ filename + self.feature + '.pkl', 'rb') as feature_handle:
-#                 feat_mat = pickle.load(feature_handle)
-#
-#         feat_mat = torch.from_numpy(feat_mat)
-#         this_feat_len = feat_mat.shape[1]
-#         # assert self.csv.at[idx, "feat_len"] == feat_mat.shape[1]
-#         if this_feat_len > self.feat_len:
-#             startp = np.random.randint(this_feat_len-self.feat_len)
-#             feat_mat = feat_mat[:, startp:startp+self.feat_len]
-#         if this_feat_len < self.feat_len:
-#             if self.padding == 'zero':
-#                 feat_mat = padding(feat_mat, self.feat_len)
-#             elif self.padding == 'repeat':
-#                 feat_mat = repeat_padding(feat_mat, self.feat_len)
-#             else:
-#                 raise ValueError('Padding should be zero or repeat!')
-#
-#         return feat_mat, filename, self.tag[tag], self.label[label]
-#
-#     def collate_fn(self, samples):
-#         return default_collate(samples)
 
 
 class ASVspoof2019(Dataset):
@@ -523,10 +575,12 @@ if __name__ == "__main__":
     # print(tag)
     # print(label)
 
-    asvspoof = ASVspoof2019("LA", "/dataNVME/neil/ASVspoof2019LA/", part='train', feature='LFCC', feat_len=750, padding='repeat')
-    print(len(asvspoof))
-    featTensor, filename, tag, label = asvspoof[123]
-    print(featTensor.shape)
-    print(filename)
-    print(tag)
-    print(label)
+    # asvspoof = ASVspoof2019("LA", "/dataNVME/neil/ASVspoof2019LA/", part='train', feature='LFCC', feat_len=750, padding='repeat')
+    # print(len(asvspoof))
+    # featTensor, filename, tag, label = asvspoof[123]
+    # print(featTensor.shape)
+    # print(filename)
+    # print(tag)
+    # print(label)
+
+    libritts = LIBRITTS(root="/data/neil", download=True)
