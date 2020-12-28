@@ -161,14 +161,15 @@ def train(args):
     trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
-    libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
+    if args.ratio < 1:
+        libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
+        libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
 
-    libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)), shuffle=True, num_workers=args.num_workers,
-                            collate_fn=libri_set_train.collate_fn)
-    libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
-                                       shuffle=True, num_workers=args.num_workers,
-                                       collate_fn=libri_set_dev.collate_fn)
+        libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)), shuffle=True, num_workers=args.num_workers,
+                                collate_fn=libri_set_train.collate_fn)
+        libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
+                                           shuffle=True, num_workers=args.num_workers,
+                                           collate_fn=libri_set_dev.collate_fn)
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
@@ -245,10 +246,11 @@ def train(args):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.transpose(2,3).to(args.device)
 
-            featTensor, _, _ = next(iter(libriDataLoader_train))
-            cqcc = torch.cat((cqcc, featTensor.transpose(2,3)), 0)
-            tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-            labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
+            if args.ratio < 1:
+                featTensor, _, _ = next(iter(libriDataLoader_train))
+                cqcc = torch.cat((cqcc, featTensor.transpose(2,3)), 0)
+                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
+                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
 
             tags = tags.to(args.device)
             labels = labels.to(args.device)
@@ -370,10 +372,11 @@ def train(args):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
-                featTensor, _, _ = next(iter(libriDataLoader_dev))
-                cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
-                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
+                if args.ratio < 1:
+                    featTensor, _, _ = next(iter(libriDataLoader_dev))
+                    cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
+                    tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
+                    labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
 
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
