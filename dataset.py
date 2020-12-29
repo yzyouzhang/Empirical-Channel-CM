@@ -168,7 +168,7 @@ class LIBRITTS(Dataset):
     def __init__(
         self,
         root: Union[str, Path],
-        url: str = "train-clean-360",
+        url: str = "test-clean",
         folder_in_archive: str = "LibriTTS",
         download: bool = False) -> None:
 

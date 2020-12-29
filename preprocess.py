@@ -3,7 +3,7 @@ from feature_extraction import LFCC
 import os
 import torch
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 cuda = torch.cuda.is_available()
 print('Cuda device available: ', cuda)
@@ -45,7 +45,8 @@ device = torch.device("cuda" if cuda else "cpu")
 #     print("Done!")
 
 libritts = dataset.LIBRITTS(root="/data/neil")
-target_dir = "/dataNVME/neil/libriTTS/LFCC"
+print(len(libritts))
+target_dir = "/dataNVME/neil/libriTTS/test-clean/LFCC/"
 lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
 lfcc = lfcc.to(device)
 for idx in range(len(libritts)):

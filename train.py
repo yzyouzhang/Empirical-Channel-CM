@@ -32,7 +32,7 @@ def initParams():
                         default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
     parser.add_argument("-e", "--path_to_external", type=str, help="external data for training",
-                        default="/dataNVME/neil/libriSpeech/")
+                        default="/dataNVME/neil/libriTTS/train-clean-360")
 
     parser.add_argument("--ratio", type=float, default=0.3,
                         help="ASVspoof ratio in a training batch, the other should be external genuine speech")
