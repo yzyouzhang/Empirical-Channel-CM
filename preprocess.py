@@ -46,7 +46,7 @@ device = torch.device("cuda" if cuda else "cpu")
 
 libritts = dataset.LIBRITTS(root="/data/neil")
 print(len(libritts))
-target_dir = "/dataNVME/neil/libriTTS/test-clean/LFCC/"
+target_dir = "/dataNVME/neil/libriTTS/train-clean-100/LFCC/"
 lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
 lfcc = lfcc.to(device)
 for idx in range(len(libritts)):

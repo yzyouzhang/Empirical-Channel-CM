@@ -81,6 +81,9 @@ def initParams():
 
     args = parser.parse_args()
 
+    # Check ratio
+    assert (args.ratio > 0) and (args.ratio <= 1)
+
     # Change this to specify GPU
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
