@@ -11,6 +11,13 @@ import urllib.request
 from torch.utils.model_zoo import tqdm
 import random
 import numpy as np
+from dataset import ASVspoof2019, LibriGenuine
+from torch.utils.data import DataLoader
+import torch.nn.functional as F
+import eval_metrics as em
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+device = torch.device("cuda")
 
 ## Adapted from https://github.com/pytorch/audio/tree/master/torchaudio
 ## https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/blob/newfunctions/
@@ -221,3 +228,66 @@ def walk_files(root: str,
 
                 yield f
 
+def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_genuine=False):
+    dirname = os.path.dirname
+    basename = os.path.splitext(os.path.basename(feat_model_path))[0]
+    if "checkpoint" in dirname(feat_model_path):
+        dir_path = dirname(dirname(feat_model_path))
+    else:
+        dir_path = dirname(feat_model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = torch.load(feat_model_path)
+    # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
+    loss_model = torch.load(loss_model_path) if add_loss is not None else None
+    test_set = ASVspoof2019("LA", "/dataNVME/neil/ASVspoof2019LA/", part,
+                            "LFCC", feat_len=750, padding="repeat")
+    if add_external_genuine:
+        external_genuine = LibriGenuine("/dataNVME/neil/libriTTS/train-clean-100", part="train", feature="LFCC", feat_len=750, padding="repeat")
+
+        test_set += external_genuine
+    testDataLoader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=0)
+    model.eval()
+    score_loader, idx_loader = [], []
+
+    for i, (lfcc, tags, labels) in enumerate(tqdm(testDataLoader)):
+        lfcc = lfcc.transpose(2,3).to(device)
+        # print(lfcc.shape)
+        tags = tags.to(device)
+        labels = labels.to(device)
+
+        feats, lfcc_outputs = model(lfcc)
+
+        score = F.softmax(lfcc_outputs)[:, 0]
+        # print(score)
+
+        if add_loss == "ocsoftmax":
+            ang_isoloss, score = loss_model(feats, labels)
+        elif add_loss == "amsoftmax":
+            outputs, moutputs = loss_model(feats, labels)
+            score = F.softmax(outputs, dim=1)[:, 0]
+        else: pass
+            # raise ValueError("loss added not valid")
+        score_loader.append(score.detach().cpu())
+        idx_loader.append(labels.detach().cpu())
+
+    scores = torch.cat(score_loader, 0).data.cpu().numpy()
+    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+    eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+    other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+    eer = min(eer, other_eer)
+
+    return eer
+
+def test(model_dir, add_loss):
+    model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
+    loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
+    test_model(model_path, loss_model_path, "eval", add_loss)
+
+if __name__ == "__main__":
+    model_dir = "/data/neil/analyse/models1230/ang_iso0.5"
+    model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
+    loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
+    eer = test_model(model_path, loss_model_path, "eval", None, add_external_genuine=False)
+    print(eer)
+    eer = test_model(model_path, loss_model_path, "eval", None, add_external_genuine=True)
+    print(eer)

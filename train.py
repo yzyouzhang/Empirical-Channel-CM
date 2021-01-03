@@ -76,8 +76,6 @@ def initParams():
     parser.add_argument('--continue_training', action='store_true', help="continue training with trained model")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
-    parser.add_argument('--prtrn_mthd', type=str, default='cross_entropy',
-                            choices=['cross_entropy', 'single_center'], help="pretrain method, in other words, pretrain with what loss")
 
     args = parser.parse_args()
 
@@ -168,15 +166,14 @@ def train(args):
         libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
         libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
 
-        libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)), shuffle=True, num_workers=args.num_workers,
-                                collate_fn=libri_set_train.collate_fn)
+        libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
+                                           shuffle=True, num_workers=args.num_workers)
         libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
-                                           shuffle=True, num_workers=args.num_workers,
-                                           collate_fn=libri_set_dev.collate_fn)
+                                           shuffle=True, num_workers=args.num_workers)
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
-    feat, _, _, _ = training_set[23]
+    feat, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
     if args.base_loss == "ce":
@@ -245,7 +242,7 @@ def train(args):
         # with trange(len(trainDataLoader)) as t:
         #     for i in t:
 
-        for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
+        for i, (cqcc, tags, labels) in enumerate(tqdm(trainDataLoader)):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -371,7 +368,7 @@ def train(args):
             # with trange(2) as v:
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
-            for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
+            for i, (cqcc, tags, labels) in enumerate(tqdm(valDataLoader)):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -450,7 +447,7 @@ def train(args):
 
         with torch.no_grad():
             ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-            for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+            for i, (cqcc, tags, labels) in enumerate(tqdm(testDataLoader)):
                 cqcc = cqcc.transpose(2,3).to(args.device)
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
@@ -527,14 +524,6 @@ def train(args):
                 loss_model = ang_iso
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "multi_isolate":
-                loss_model = multi_iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "multicenter_isolate":
-                loss_model = multicenter_iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             elif args.add_loss == "lgm":
                 loss_model = lgm_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
@@ -557,12 +546,6 @@ def train(args):
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             elif args.add_loss == "ang_iso":
                 loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "multi_isolate":
-                loss_model = multi_iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "multicenter_isolate":
-                loss_model = multicenter_iso_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             elif args.add_loss == "lgm":
                 loss_model = lgm_loss

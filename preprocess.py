@@ -3,7 +3,7 @@ from feature_extraction import LFCC
 import os
 import torch
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 cuda = torch.cuda.is_available()
 print('Cuda device available: ', cuda)
