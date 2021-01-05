@@ -5,7 +5,7 @@ import os
 import json
 import shutil
 import numpy as np
-from model import ResNet
+from model import ResNet, ConvNet
 from dataset import ASVspoof2019, LibriGenuine
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
@@ -147,6 +147,8 @@ def train(args):
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
+    elif args.model == 'cnn':
+        cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
         pass
     if args.continue_training:
@@ -349,8 +351,6 @@ def train(args):
             tags = torch.cat(tag_loader, 0)
             if args.add_loss in ["isolate", "iso_sq"]:
                 centers = iso_loss.center
-            elif args.add_loss == "multi_isolate":
-                centers = multi_iso_loss.centers
             elif args.add_loss == "ang_iso":
                 centers = ang_iso.center
             else:
@@ -435,8 +435,6 @@ def train(args):
                 tags = torch.cat(tag_loader, 0)
                 if args.add_loss == "isolate":
                     centers = iso_loss.center
-                elif args.add_loss == "multi_isolate":
-                    centers = multi_iso_loss.centers
                 elif args.add_loss == "ang_iso":
                     centers = ang_iso.center
                 else:

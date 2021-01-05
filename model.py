@@ -47,6 +47,74 @@ class SelfAttention(nn.Module):
 
             return representations
 
+class ConvNet(nn.Module):
+    def __init__(self, num_classes=2, num_nodes=512, enc_dim=2, subband_attention=False):
+        super(ConvNet, self).__init__()
+
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=(5, 5), padding=(1, 2), dilation=(1, 2), stride=(2, 3), bias=False),
+            nn.BatchNorm2d(8),
+            nn.LeakyReLU(0.1),
+            # nn.MaxPool2d(kernel_size=3, stride=3)
+        )
+        self.layer2 = nn.Sequential(
+            nn.Conv2d(8, 16, kernel_size=(5, 5), padding=(1, 2), dilation=(1, 2), stride=(2, 2), bias=False),
+            nn.BatchNorm2d(16),
+            nn.LeakyReLU(0.1),
+            # nn.MaxPool2d(kernel_size=3, stride=3)
+        )
+        self.layer3 = nn.Sequential(
+            nn.Conv2d(16, 32, kernel_size=(5, 5), padding=(1, 2), dilation=(1, 1), stride=(2, 1), bias=False),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.1),
+            # nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.layer4 = nn.Sequential(
+            nn.Conv2d(32, 64, kernel_size=(3, 3), padding=(1, 1), dilation=(1, 1), stride=(1, 1), bias=False),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.1),
+            # nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+
+        self.layer5 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=(num_nodes, 3), padding=(0, 1), dilation=(1, 1), stride=(1, 1), bias=False),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.1),
+            # nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+
+        self.fc1 = nn.Linear(num_nodes, 256)
+        self.fc2 = nn.Linear(256, enc_dim)
+        self.fc3 = nn.Linear(enc_dim, num_classes)
+        # self.dropout = nn.Dropout(0.2)
+
+        self.subband_attention = subband_attention
+        if self.subband_attention:
+            self.attention = SelfAttention(128)
+
+    def forward(self, x):
+        h = self.layer1(x)
+        h = self.layer2(h)
+        h = self.layer3(h)
+        h = self.layer4(h)
+
+        # print(h.shape)
+        if self.subband_attention:
+            # print(h.shape)
+            h = self.layer5(h)
+            h = h.squeeze(2)
+            # print(h.shape)
+            h = self.attention(h.permute(0, 2, 1).contiguous())
+            # print(h.shape)
+            out = h
+        else:
+            h = h.reshape(h.size(0), -1)
+            out = self.fc1(h)
+        # h = self.dropout(h)
+        out1 = self.fc2(out)
+        out = self.fc3(out1)
+
+        return out1, out
 
 class PreActBlock(nn.Module):
     '''Pre-activation version of the BasicBlock.'''
@@ -304,11 +372,16 @@ class LCNN(nn.Module):
         return x
 
 if __name__ == "__main__":
+    os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
     # cqcc = torch.randn((32,1,90,788)).cuda()
     # resnet = ResNet(4, 2, resnet_type='18', nclasses=2).cuda()
     # _, output = resnet(cqcc)
     # print(output.shape)
-    lfcc = torch.randn((32, 1, 60, 750)).cuda()
-    lcnn = LCNN(4, 2, nclasses=2).cuda()
-    output = lcnn(lfcc)
+    lfcc = torch.randn((1, 1, 60, 750)).cuda()
+    # lcnn = LCNN(4, 2, nclasses=2).cuda()
+    # output = lcnn(lfcc)
+    # print(output.shape)
+    cnn = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).cuda()
+    _, output = cnn(lfcc)
     print(output.shape)

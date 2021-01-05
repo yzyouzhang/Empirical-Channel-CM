@@ -245,7 +245,7 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_ge
         external_genuine = LibriGenuine("/dataNVME/neil/libriTTS/train-clean-100", part="train", feature="LFCC", feat_len=750, padding="repeat")
 
         test_set += external_genuine
-    testDataLoader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set, batch_size=8, shuffle=False, num_workers=0)
     model.eval()
     score_loader, idx_loader = [], []
 
@@ -284,10 +284,10 @@ def test(model_dir, add_loss):
     test_model(model_path, loss_model_path, "eval", add_loss)
 
 if __name__ == "__main__":
-    model_dir = "/data/neil/analyse/models1230/ang_iso0.5"
+    model_dir = "/data/neil/analyse/models0103/lgcl"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    eer = test_model(model_path, loss_model_path, "eval", None, add_external_genuine=False)
+    eer = test_model(model_path, loss_model_path, "eval", "amsoftmax", add_external_genuine=False)
     print(eer)
-    eer = test_model(model_path, loss_model_path, "eval", None, add_external_genuine=True)
+    eer = test_model(model_path, loss_model_path, "eval", "amsoftmax", add_external_genuine=True)
     print(eer)
