@@ -363,7 +363,6 @@ class ASVspoof2019Raw(Dataset):
         self.part = part
         self.path_to_audio = os.path.join(self.ptd, access_type, 'ASVspoof2019_'+access_type+'_'+ self.part +'/flac/')
         self.path_to_protocol = path_to_protocol
-        self.padding = padding
         protocol = os.path.join(self.path_to_protocol, 'ASVspoof2019.'+access_type+'.cm.'+ self.part + '.trl.txt')
         if self.part == "eval":
             protocol = os.path.join(self.ptd, access_type, 'ASVspoof2019_' + access_type +

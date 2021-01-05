@@ -10,7 +10,7 @@ import librosa
 from torch.utils.data.dataloader import default_collate
 
 class ASVspoof2019(Dataset):
-    def __init__(self, access_type, path_to_features, part='train', feature='LFCC', feat_len=750, padding='repeat'):
+    def __init__(self, access_type, path_to_features, part='train', feature='LFCC', feat_len=750, padding='repeat', genuine_only=False):
         super(ASVspoof2019, self).__init__()
         self.access_type = access_type
         self.path_to_features = path_to_features
@@ -19,6 +19,7 @@ class ASVspoof2019(Dataset):
         self.feat_len = feat_len
         self.feature = feature
         self.padding = padding
+        self.genuine_only = genuine_only
         if self.access_type == 'LA':
             self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
                       "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
