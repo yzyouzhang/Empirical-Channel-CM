@@ -284,7 +284,7 @@ def test(model_dir, add_loss):
     test_model(model_path, loss_model_path, "eval", add_loss)
 
 if __name__ == "__main__":
-    model_dir = "/data/neil/analyse/models0103/lgcl"
+    model_dir = "/data/neil/analyse/models0103/lgcl0.5"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     eer = test_model(model_path, loss_model_path, "eval", "amsoftmax", add_external_genuine=False)

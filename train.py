@@ -106,7 +106,7 @@ def initParams():
             os.mkdir(os.path.join(args.out_fold, 'checkpoint'))
 
         # Path for input data
-        assert os.path.exists(args.path_to_database)
+        # assert os.path.exists(args.path_to_database)
         assert os.path.exists(args.path_to_features)
 
         # Save training arguments
@@ -161,7 +161,7 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers)
+    trainDataLoader = DataLoader(training_set+validation_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     if args.ratio < 1:
