@@ -30,6 +30,10 @@ class ASVspoof2019(Dataset):
             raise ValueError("Access type should be LA or PA!")
         self.label = {"spoof": 1, "bonafide": 0}
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
+        if self.genuine_only:
+            assert self.access_type == "LA"
+            num_bonafide = {"train": 2580, "dev": 2548, "eval": 7533}
+            self.all_files = self.all_files[:num_bonafide[self.part]]
 
     def __len__(self):
         return len(self.all_files)
@@ -188,12 +192,12 @@ if __name__ == "__main__":
     # print(tag)
     # print(label)
 
-    # asvspoof = ASVspoof2019("LA", "/dataNVME/neil/ASVspoof2019LA/", part='train', feature='LFCC', feat_len=750, padding='repeat')
-    # print(len(asvspoof))
-    # featTensor, filename, tag, label = asvspoof[123]
-    # print(featTensor.shape)
+    asvspoof = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA/", part='train', feature='LFCC', feat_len=750, padding='repeat', genuine_only=True)
+    print(len(asvspoof))
+    featTensor, tag, label = asvspoof[2579]
+    print(featTensor.shape)
     # print(filename)
-    # print(tag)
-    # print(label)
+    print(tag)
+    print(label)
 
-    libritts = LIBRITTS(root="/data/neil", download=True)
+    # libritts = LIBRITTS(root="/data/neil", download=True)

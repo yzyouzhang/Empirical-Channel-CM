@@ -27,7 +27,7 @@ def initParams():
     parser.add_argument("-a", "--access_type", type=str, help="LA or PA", default='LA')
     parser.add_argument("-d", "--path_to_database", type=str, help="dataset path", default='/data/neil/DS_10283_3336/')
     parser.add_argument("-f", "--path_to_features", type=str, help="features path",
-                        default='/dataNVME/neil/ASVspoof2019LA/')
+                        default='/data2/neil/ASVspoof2019LA/')
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
                         default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
@@ -76,6 +76,7 @@ def initParams():
     parser.add_argument('--continue_training', action='store_true', help="continue training with trained model")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
+    parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
 
     args = parser.parse_args()
 
@@ -161,9 +162,14 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, padding=args.padding)
-    trainDataLoader = DataLoader(training_set+validation_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers)
+    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
+    if args.add_genuine:
+        training_genuine = ASVspoof2019(args.access_type, args.path_to_features, 'train',
+                                        args.feat, feat_len=args.feat_len, padding=args.padding, genuine_only=True)
+        trainGenDataLoader = DataLoader(training_genuine, batch_size=int(args.batch_size * args.ratio), shuffle=True,
+                                        num_workers=args.num_workers)
     if args.ratio < 1:
         libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
         libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
@@ -247,6 +253,11 @@ def train(args):
         for i, (cqcc, tags, labels) in enumerate(tqdm(trainDataLoader)):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.transpose(2,3).to(args.device)
+            if args.add_genuine:
+                featTensor, _, _ = next(iter(trainGenDataLoader))
+                cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
+                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
+                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
 
             if args.ratio < 1:
                 featTensor, _, _ = next(iter(libriDataLoader_train))
