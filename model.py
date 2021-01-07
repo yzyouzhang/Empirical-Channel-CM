@@ -329,7 +329,7 @@ class LCNN(nn.Module):
         self.conv8 = nn.Sequential(nn.Conv2d(32, 64, (1, 1), 1, padding=(0, 0)),
                                    MaxFeatureMap2D(),
                                    nn.BatchNorm2d(32, affine=False))
-        self.conv9 = nn.Sequential(nn.Conv2d(32, 64, [3, 3], 1, padding=[1, 1]),
+        self.conv9 = nn.Sequential(nn.Conv2d(32, 64, (3, 3), 1, padding=[1, 1]),
                                    MaxFeatureMap2D(),
                                    nn.MaxPool2d((2, 2), (2, 2)))
         self.out = nn.Sequential(nn.Dropout(0.7),
