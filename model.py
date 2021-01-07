@@ -357,19 +357,10 @@ class LCNN(nn.Module):
         print(x.shape)
         x = self.conv9(x)
         print(x.shape)
-        x = self.out(x)
-        # torch.flatten(hidden_features, 1)
+        feat = torch.flatten(x, 1)
+        x = self.out(feat)
 
-        # x = self.activation(self.bn5(x)).squeeze(2)
-
-        # stats = self.attention(x.permute(0, 2, 1).contiguous())
-        #
-        # feat = self.fc(stats)
-        #
-        # mu = self.fc_mu(feat)
-
-        # return feat, mu
-        return x
+        return feat, x
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -380,7 +371,7 @@ if __name__ == "__main__":
     # print(output.shape)
     lfcc = torch.randn((1, 1, 60, 750)).cuda()
     lcnn = LCNN(4, 2, nclasses=2).cuda()
-    output = lcnn(lfcc)
+    feat, output = lcnn(lfcc)
     print(output.shape)
     # cnn = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).cuda()
     # _, output = cnn(lfcc)

@@ -5,7 +5,7 @@ import os
 import json
 import shutil
 import numpy as np
-from model import ResNet, ConvNet
+from model import ResNet, ConvNet, LCNN
 from dataset import ASVspoof2019, LibriGenuine
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
@@ -151,7 +151,8 @@ def train(args):
     elif args.model == 'cnn':
         cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
-        pass
+        cqcc_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
+
     if args.continue_training:
         cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
     cqcc_model = nn.DataParallel(cqcc_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
