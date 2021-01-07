@@ -336,31 +336,24 @@ class LCNN(nn.Module):
                                  nn.Linear((750 // 16) * (60 // 16) * 32, 160),
                                  MaxFeatureMap2D(),
                                  nn.Linear(80, self.enc_dim))
+        self.fc_mu = nn.Linear(enc_dim, nclasses) if nclasses >= 2 else nn.Linear(enc_dim, 1)
 
     def forward(self, x):
 
         x = self.conv1(x)
-        print(x.shape)
         x = self.conv2(x)
-        print(x.shape)
         x = self.conv3(x)
-        print(x.shape)
         x = self.conv4(x)
-        print(x.shape)
         x = self.conv5(x)
-        print(x.shape)
         x = self.conv6(x)
-        print(x.shape)
         x = self.conv7(x)
-        print(x.shape)
         x = self.conv8(x)
-        print(x.shape)
         x = self.conv9(x)
-        print(x.shape)
         feat = torch.flatten(x, 1)
-        x = self.out(feat)
+        feat = self.out(feat)
+        out = self.fc_mu(feat)
 
-        return feat, x
+        return feat, out
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
