@@ -10,7 +10,7 @@ import librosa
 from torch.utils.data.dataloader import default_collate
 
 class ASVspoof2019(Dataset):
-    def __init__(self, access_type, path_to_features, part='train', feature='LFCC', feat_len=750, padding='repeat', genuine_only=False):
+    def __init__(self, access_type, path_to_features, part='train', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
         super(ASVspoof2019, self).__init__()
         self.access_type = access_type
         self.path_to_features = path_to_features
@@ -18,6 +18,7 @@ class ASVspoof2019(Dataset):
         self.ptf = os.path.join(path_to_features, self.part)
         self.feat_len = feat_len
         self.feature = feature
+        self.pad_chop = pad_chop
         self.padding = padding
         self.genuine_only = genuine_only
         if self.access_type == 'LA':
@@ -45,23 +46,36 @@ class ASVspoof2019(Dataset):
         assert len(all_info) == 6
         featureTensor = torch.load(filepath)
         this_feat_len = featureTensor.shape[1]
-        if this_feat_len > self.feat_len:
-            startp = np.random.randint(this_feat_len - self.feat_len)
-            featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
-        if this_feat_len < self.feat_len:
-            if self.padding == 'zero':
-                featureTensor = padding_Tensor(featureTensor, self.feat_len)
-            elif self.padding == 'repeat':
-                featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
-            else:
-                raise ValueError('Padding should be zero or repeat!')
+        if self.pad_chop:
+            if this_feat_len > self.feat_len:
+                startp = np.random.randint(this_feat_len - self.feat_len)
+                featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+            if this_feat_len < self.feat_len:
+                if self.padding == 'zero':
+                    featureTensor = padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'repeat':
+                    featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                else:
+                    raise ValueError('Padding should be zero or repeat!')
+        else:
+            pass
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, tag, label
+        return featureTensor, tag, label, this_feat_len
 
-    # def collate_fn(self, samples):
-    #     return default_collate(samples)
+    def collate_fn(self, samples):
+        if self.pad_chop:
+            return default_collate(samples)
+        else:
+            feat_mat = [sample[0].transpose(0,1) for sample in samples]
+            from torch.nn.utils.rnn import pad_sequence
+            feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
+            tag = [sample[1] for sample in samples]
+            label = [sample[2] for sample in samples]
+            this_len = [sample[3] for sample in samples]
+
+            return feat_mat, default_collate(tag), default_collate(label), default_collate(this_len)
 
 class LibriGenuine(Dataset):
     def __init__(self, path_to_features, part='train', feature='LFCC', feat_len=750, padding='repeat'):
@@ -127,77 +141,32 @@ def repeat_padding_Tensor(spec, ref_len):
 
 
 if __name__ == "__main__":
-    # path_to_database = '/data/neil/DS_10283_3336/'  # if run on GPU
-    # path_to_features = '/dataNVME/neil/ASVspoof2019LAFeatures/'  # if run on GPU
-    # path_to_protocol = '/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/'
-    # training_set = ASVspoof2019("LA", path_to_database, path_to_features, path_to_protocol, genuine_only=False, pad_chop=False, feature='LFCC', feat_len=320)
-    # feat_mat, audio_fn, tag, label = training_set[2999]
-    # print(len(training_set))
-    # print(audio_fn)
-    # print(feat_mat.shape)
-    # # print(cqcc.shape)
-    # # print(lfcc.shape)
-    # print(tag)
-    # print(label)
+    path_to_features = '/data2/neil/ASVspoof2019LA/'  # if run on GPU
+    training_set = ASVspoof2019("LA", path_to_features, 'train',
+                                'LFCC', feat_len=750, pad_chop=False, padding='repeat')
+    feat_mat, tag, label, this_len = training_set[2999]
+    print(len(training_set))
+    print(this_len)
+    print(feat_mat.shape)
+    print(tag)
+    print(label)
 
     # samples = [training_set[26], training_set[27], training_set[28], training_set[29]]
     # out = training_set.collate_fn(samples)
 
-    # training_set = ASVspoof2019(path_to_database, path_to_features)
-    # cqcc, audio_fn, tag, label = training_set[2580]
-    # print(len(training_set))
-    # print(audio_fn)
-    # # print(mfcc.shape)
-    # print(cqcc.shape)
-    # # print(lfcc.shape)
-    # print(tag)
-    # print(label)
+    trainDataLoader = DataLoader(training_set, batch_size=32, shuffle=True, num_workers=0, collate_fn=training_set.collate_fn)
+    feat_mat_batch, tags, labels, this_len = [d for d in next(iter(trainDataLoader))]
+    print(feat_mat_batch.shape)
+    print(this_len)
+    # print(feat_mat_batch)
 
-    # trainDataLoader = DataLoader(training_set, batch_size=32, shuffle=True, num_workers=0, collate_fn=training_set.collate_fn)
-    # feat_mat_batch, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
-    # print(feat_mat_batch.shape)
-    # # print(feat_mat_batch)
-    #
-    # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
-    # print(len(vctk))
-    # waveform, sample_rate, utterance, speaker_id, utterance_id = vctk[124]
-    # print(waveform.shape)
-    # print(sample_rate)
-    # print(utterance)
-    # print(speaker_id)
-    # print(utterance_id)
 
-    # librispeech = LIBRISPEECH(root="/data/neil")
-    # print(len(librispeech))
-    # waveform, sample_rate, utterance, speaker_id, chapter_id, utterance_id = librispeech[164]
-    # print(waveform.shape)
-    # print(sample_rate)
-    # print(utterance)
-    # print(speaker_id)
-    # print(chapter_id)
-    # print(utterance_id)
-    #
-    # libriGen = LibriGenuine("/dataNVME/neil/libriSpeech/", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat')
-    # print(len(libriGen))
-    # featTensor, tag, label = libriGen[123]
+    # asvspoof = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA/", part='train', feature='LFCC', feat_len=750, padding='repeat', genuine_only=True)
+    # print(len(asvspoof))
+    # featTensor, tag, label = asvspoof[2579]
     # print(featTensor.shape)
+    # # print(filename)
     # print(tag)
     # print(label)
-
-    # asvspoof_raw = ASVspoof2019Raw("LA", "/data/neil/DS_10283_3336/", "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part="eval")
-    # print(len(asvspoof_raw))
-    # waveform, filename, tag, label = asvspoof_raw[123]
-    # print(waveform.shape)
-    # print(filename)
-    # print(tag)
-    # print(label)
-
-    asvspoof = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA/", part='train', feature='LFCC', feat_len=750, padding='repeat', genuine_only=True)
-    print(len(asvspoof))
-    featTensor, tag, label = asvspoof[2579]
-    print(featTensor.shape)
-    # print(filename)
-    print(tag)
-    print(label)
 
     # libritts = LIBRITTS(root="/data/neil", download=True)

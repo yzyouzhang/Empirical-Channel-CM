@@ -23,7 +23,6 @@ class SelfAttention(nn.Module):
         init.kaiming_uniform_(self.att_weights)
 
     def forward(self, inputs):
-
         batch_size = inputs.size(0)
         weights = torch.bmm(inputs, self.att_weights.permute(1, 0).unsqueeze(0).repeat(batch_size, 1, 1))
 

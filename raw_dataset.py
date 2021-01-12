@@ -394,3 +394,39 @@ class ASVspoof2019Raw(Dataset):
 
     def collate_fn(self, samples):
         return default_collate(samples)
+
+if __name__ == "__main__":
+    # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
+    # print(len(vctk))
+    # waveform, sample_rate, utterance, speaker_id, utterance_id = vctk[124]
+    # print(waveform.shape)
+    # print(sample_rate)
+    # print(utterance)
+    # print(speaker_id)
+    # print(utterance_id)
+    #
+    # librispeech = LIBRISPEECH(root="/data/neil")
+    # print(len(librispeech))
+    # waveform, sample_rate, utterance, speaker_id, chapter_id, utterance_id = librispeech[164]
+    # print(waveform.shape)
+    # print(sample_rate)
+    # print(utterance)
+    # print(speaker_id)
+    # print(chapter_id)
+    # print(utterance_id)
+    #
+    # libriGen = LibriGenuine("/dataNVME/neil/libriSpeech/", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat')
+    # print(len(libriGen))
+    # featTensor, tag, label = libriGen[123]
+    # print(featTensor.shape)
+    # print(tag)
+    # print(label)
+    #
+    # asvspoof_raw = ASVspoof2019Raw("LA", "/data/neil/DS_10283_3336/", "/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part="eval")
+    # print(len(asvspoof_raw))
+    # waveform, filename, tag, label = asvspoof_raw[123]
+    # print(waveform.shape)
+    # print(filename)
+    # print(tag)
+    # print(label)
+    pass

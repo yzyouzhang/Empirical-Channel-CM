@@ -41,6 +41,7 @@ def initParams():
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
                         choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
+    parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat'],
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
@@ -70,7 +71,6 @@ def initParams():
     parser.add_argument('--alpha', type=float, default=20, help="scale factor for angular isolate loss")
     parser.add_argument('--num_centers', type=int, default=3, help="num of centers for multi isolate loss")
 
-    parser.add_argument('--enable_tag', type=bool, default=False, help="use tags as multi-class label")
     parser.add_argument('--visualize', action='store_true', help="feature visualization")
     parser.add_argument('--test_only', action='store_true', help="test the trained model in case the test crash sometimes or another test method")
     parser.add_argument('--continue_training', action='store_true', help="continue training with trained model")
@@ -124,8 +124,8 @@ def initParams():
     args.cuda = torch.cuda.is_available()
     print('Cuda device available: ', args.cuda)
     args.device = torch.device("cuda" if args.cuda else "cpu")
-    # if int(args.gpu) == 5:
-    #     args.device = torch.device("cpu")
+
+    print(args.pad_chop)
 
     return args
 
@@ -134,12 +134,13 @@ def adjust_learning_rate(args, optimizer, epoch_num):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def shuffle(cqcc, tags, labels):
+def shuffle(cqcc, tags, labels, this_len):
     shuffle_index = torch.randperm(labels.shape[0])
     cqcc = cqcc[shuffle_index]
     tags = tags[shuffle_index]
     labels = labels[shuffle_index]
-    return cqcc, tags, labels
+    this_len = this_len[shuffle_index]
+    return cqcc, tags, labels, this_len
 
 def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
@@ -160,17 +161,19 @@ def train(args):
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
-                                args.feat, feat_len=args.feat_len, padding=args.padding)
+                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
-                                  args.feat, feat_len=args.feat_len, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio), shuffle=True, num_workers=args.num_workers)
-    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
+                                 shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
+    valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
+                               shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
 
     if args.add_genuine:
         training_genuine = ASVspoof2019(args.access_type, args.path_to_features, 'train',
-                                        args.feat, feat_len=args.feat_len, padding=args.padding, genuine_only=True)
+                                        args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding, genuine_only=True)
         trainGenDataLoader = DataLoader(training_genuine, batch_size=int(args.batch_size * args.ratio), shuffle=True,
-                                        num_workers=args.num_workers)
+                                        num_workers=args.num_workers, collate_fn=training_genuine.collate_fn)
     if args.ratio < 1:
         libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
         libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
@@ -179,10 +182,10 @@ def train(args):
                                            shuffle=True, num_workers=args.num_workers)
         libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
                                            shuffle=True, num_workers=args.num_workers)
-    test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, padding=args.padding)
-    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
+    test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
-    feat, _, _ = training_set[23]
+    feat, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
     if args.base_loss == "ce":
@@ -251,11 +254,12 @@ def train(args):
         # with trange(len(trainDataLoader)) as t:
         #     for i in t:
 
-        for i, (cqcc, tags, labels) in enumerate(tqdm(trainDataLoader)):
+        for i, (cqcc, tags, labels, this_len) in enumerate(tqdm(trainDataLoader)):
             # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
             cqcc = cqcc.transpose(2,3).to(args.device)
+
             if args.add_genuine:
-                featTensor, _, _ = next(iter(trainGenDataLoader))
+                featTensor, _, _, _ = next(iter(trainGenDataLoader))
                 cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
                 tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
                 labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
@@ -268,9 +272,14 @@ def train(args):
 
             tags = tags.to(args.device)
             labels = labels.to(args.device)
+            this_len = this_len.to(args.device)
 
-            cqcc, tags, labels = shuffle(cqcc, tags, labels)
-
+            cqcc, tags, labels, this_len = shuffle(cqcc, tags, labels, this_len)
+            # print(cqcc.shape)
+            # print(this_len)
+            # if not args.pad_chop:
+            #     cqcc = nn.utils.rnn.pack_padded_sequence(cqcc.squeeze(1).transpose(1,2), this_len, batch_first=True, enforce_sorted=False)
+            # print(cqcc.data.shape)
             feats, cqcc_outputs = cqcc_model(cqcc)
 
             if args.base_loss == "bce":

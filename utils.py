@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import eval_metrics as em
 import time
+from distutils import util
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 device = torch.device("cuda")
@@ -23,6 +24,8 @@ device = torch.device("cuda")
 ## Adapted from https://github.com/pytorch/audio/tree/master/torchaudio
 ## https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/blob/newfunctions/
 
+def str2bool(v):
+    return bool(util.strtobool(v))
 
 def setup_seed(random_seed, cudnn_deterministic=True):
     """ set_random_seed(random_seed, cudnn_deterministic=True)
