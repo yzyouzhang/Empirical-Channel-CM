@@ -34,7 +34,7 @@ def initParams():
     parser.add_argument("-e", "--path_to_external", type=str, help="external data for training",
                         default="/dataNVME/neil/libriTTS/train-clean-360")
 
-    parser.add_argument("--ratio", type=float, default=0.3,
+    parser.add_argument("--ratio", type=float, default=1,
                         help="ASVspoof ratio in a training batch, the other should be external genuine speech")
 
     # Dataset prepare
@@ -51,7 +51,7 @@ def initParams():
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
-    parser.add_argument('--lr', type=float, default=0.001, help="learning rate")
+    parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
     parser.add_argument('--interval', type=int, default=10, help="interval to decay lr")
 

@@ -15,8 +15,9 @@ from dataset import ASVspoof2019, LibriGenuine
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import eval_metrics as em
+import time
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 device = torch.device("cuda")
 
 ## Adapted from https://github.com/pytorch/audio/tree/master/torchaudio
@@ -38,15 +39,15 @@ def setup_seed(random_seed, cudnn_deterministic=True):
     """
 
     # initialization
-    # torch.manual_seed(random_seed)
+    torch.manual_seed(random_seed)
     random.seed(random_seed)
     np.random.seed(random_seed)
     os.environ['PYTHONHASHSEED'] = str(random_seed)
 
-    # if torch.cuda.is_available():
-    #     torch.cuda.manual_seed_all(random_seed)
-    #     torch.backends.cudnn.deterministic = cudnn_deterministic
-    #     torch.backends.cudnn.benchmark = False
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(random_seed)
+        torch.backends.cudnn.deterministic = cudnn_deterministic
+        torch.backends.cudnn.benchmark = False
 
 
 def stream_url(url: str,
@@ -284,10 +285,12 @@ def test(model_dir, add_loss):
     test_model(model_path, loss_model_path, "eval", add_loss)
 
 if __name__ == "__main__":
-    model_dir = "/data/neil/analyse/models0103/lgcl0.5"
+    # start = time.time()
+    model_dir = "/data/neil/analyse/models0103/ang_iso0.5"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    eer = test_model(model_path, loss_model_path, "eval", "amsoftmax", add_external_genuine=False)
+    eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     print(eer)
-    eer = test_model(model_path, loss_model_path, "eval", "amsoftmax", add_external_genuine=True)
+    # print(time.time() - start)
+    eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
     print(eer)
