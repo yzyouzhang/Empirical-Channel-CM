@@ -7,7 +7,13 @@ from torch.utils.data import Dataset, DataLoader
 import pickle
 import os
 import librosa
+from feature_extraction import LFCC
 from torch.utils.data.dataloader import default_collate
+
+lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+wavform = torch.Tensor(np.expand_dims([0]*3200, axis=0))
+lfcc_silence = lfcc(wavform)
+silence_pad_value = lfcc_silence[:,0,:].unsqueeze(0).cuda()
 
 class ASVspoof2019(Dataset):
     def __init__(self, access_type, path_to_features, part='train', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
@@ -62,20 +68,24 @@ class ASVspoof2019(Dataset):
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, tag, label, this_feat_len
+        return featureTensor, tag, label
 
     def collate_fn(self, samples):
         if self.pad_chop:
             return default_collate(samples)
         else:
-            feat_mat = [sample[0].transpose(0,1) for sample in samples]
-            from torch.nn.utils.rnn import pad_sequence
-            feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
+            # feat_mat = [sample[0].transpose(0,1) for sample in samples]
+            # from torch.nn.utils.rnn import pad_sequence
+            # feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
+            max_len = max([sample[0].shape[1] for sample in samples]) + 1
+            feat_mat = [silence_padding_Tensor(sample[0], max_len) for sample in samples]
+
             tag = [sample[1] for sample in samples]
             label = [sample[2] for sample in samples]
-            this_len = [sample[3] for sample in samples]
+            # this_len = [sample[3] for sample in samples]
 
-            return feat_mat, default_collate(tag), default_collate(label), default_collate(this_len)
+            # return feat_mat, default_collate(tag), default_collate(label), default_collate(this_len)
+            return default_collate(feat_mat), default_collate(tag), default_collate(label)
 
 class LibriGenuine(Dataset):
     def __init__(self, path_to_features, part='train', feature='LFCC', feat_len=750, padding='repeat'):
@@ -115,28 +125,22 @@ class LibriGenuine(Dataset):
     # def collate_fn(self, samples):
     #     return default_collate(samples)
 
-
-def padding(spec, ref_len):
-    width, cur_len = spec.shape
-    assert ref_len > cur_len
-    padd_len = ref_len - cur_len
-    return torch.cat((spec, torch.zeros(width, padd_len, dtype=spec.dtype)), 1)
-
 def padding_Tensor(spec, ref_len):
     _, cur_len, width = spec.shape
     assert ref_len > cur_len
     padd_len = ref_len - cur_len
     return torch.cat((spec, torch.zeros((1, padd_len, width), dtype=spec.dtype)), 1)
 
-def repeat_padding(spec, ref_len):
-    mul = int(np.ceil(ref_len / spec.shape[1]))
-    spec = spec.repeat(1, mul)[:, :ref_len]
-    return spec
-
 def repeat_padding_Tensor(spec, ref_len):
     mul = int(np.ceil(ref_len / spec.shape[1]))
     spec = spec.repeat(1, mul, 1)[:, :ref_len, :]
     return spec
+
+def silence_padding_Tensor(spec, ref_len):
+    _, cur_len, width = spec.shape
+    assert ref_len > cur_len
+    padd_len = ref_len - cur_len
+    return torch.cat((silence_pad_value.repeat(1, padd_len, 1), spec), 1)
 
 
 
@@ -144,9 +148,9 @@ if __name__ == "__main__":
     path_to_features = '/data2/neil/ASVspoof2019LA/'  # if run on GPU
     training_set = ASVspoof2019("LA", path_to_features, 'train',
                                 'LFCC', feat_len=750, pad_chop=False, padding='repeat')
-    feat_mat, tag, label, this_len = training_set[2999]
+    feat_mat, tag, label = training_set[2999]
     print(len(training_set))
-    print(this_len)
+    # print(this_len)
     print(feat_mat.shape)
     print(tag)
     print(label)
@@ -155,9 +159,9 @@ if __name__ == "__main__":
     # out = training_set.collate_fn(samples)
 
     trainDataLoader = DataLoader(training_set, batch_size=32, shuffle=True, num_workers=0, collate_fn=training_set.collate_fn)
-    feat_mat_batch, tags, labels, this_len = [d for d in next(iter(trainDataLoader))]
+    feat_mat_batch, tags, labels = [d for d in next(iter(trainDataLoader))]
     print(feat_mat_batch.shape)
-    print(this_len)
+    # print(this_len)
     # print(feat_mat_batch)
 
 

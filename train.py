@@ -134,13 +134,13 @@ def adjust_learning_rate(args, optimizer, epoch_num):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def shuffle(cqcc, tags, labels, this_len):
+def shuffle(cqcc, tags, labels):
     shuffle_index = torch.randperm(labels.shape[0])
     cqcc = cqcc[shuffle_index]
     tags = tags[shuffle_index]
     labels = labels[shuffle_index]
-    this_len = this_len[shuffle_index]
-    return cqcc, tags, labels, this_len
+    # this_len = this_len[shuffle_index]
+    return cqcc, tags, labels
 
 def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
@@ -185,7 +185,7 @@ def train(args):
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
-    feat, _, _, _ = training_set[23]
+    feat, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
     if args.base_loss == "ce":
@@ -250,12 +250,8 @@ def train(args):
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
-        # with trange(2) as t:
-        # with trange(len(trainDataLoader)) as t:
-        #     for i in t:
 
-        for i, (cqcc, tags, labels, this_len) in enumerate(tqdm(trainDataLoader)):
-            # cqcc, audio_fn, tags, labels = [d for d in next(iter(trainDataLoader))]
+        for i, (cqcc, tags, labels) in enumerate(tqdm(trainDataLoader)):
             cqcc = cqcc.transpose(2,3).to(args.device)
 
             if args.add_genuine:
@@ -272,9 +268,9 @@ def train(args):
 
             tags = tags.to(args.device)
             labels = labels.to(args.device)
-            this_len = this_len.to(args.device)
+            # this_len = this_len.to(args.device)
 
-            cqcc, tags, labels, this_len = shuffle(cqcc, tags, labels, this_len)
+            cqcc, tags, labels = shuffle(cqcc, tags, labels)
             # print(cqcc.shape)
             # print(this_len)
             # if not args.pad_chop:
