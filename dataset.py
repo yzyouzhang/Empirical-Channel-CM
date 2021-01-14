@@ -13,7 +13,7 @@ from torch.utils.data.dataloader import default_collate
 lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
 wavform = torch.Tensor(np.expand_dims([0]*3200, axis=0))
 lfcc_silence = lfcc(wavform)
-silence_pad_value = lfcc_silence[:,0,:].unsqueeze(0).cuda()
+silence_pad_value = lfcc_silence[:,0,:].unsqueeze(0)
 
 class ASVspoof2019(Dataset):
     def __init__(self, access_type, path_to_features, part='train', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
@@ -140,7 +140,7 @@ def silence_padding_Tensor(spec, ref_len):
     _, cur_len, width = spec.shape
     assert ref_len > cur_len
     padd_len = ref_len - cur_len
-    return torch.cat((silence_pad_value.repeat(1, padd_len, 1), spec), 1)
+    return torch.cat((silence_pad_value.repeat(1, padd_len, 1).to(spec.device), spec), 1)
 
 
 
