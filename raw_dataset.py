@@ -277,6 +277,30 @@ class ASVspoof2019Raw(Dataset):
     def collate_fn(self, samples):
         return default_collate(samples)
 
+
+class VCC2020Raw(Dataset):
+    def __init__(self, path_to_database="/data2/neil/nii-yamagishilab-VCC2020-listeningtest-31f913c"):
+        super(VCC2020Raw, self).__init__()
+        self.ptd = path_to_database
+
+        self.all_files = librosa.util.find_files(path_to_database, ext="wav")
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        filename = os.path.basename(filepath)[:-4]
+        tag = filepath.split("/")[-3]
+        label = "spoof"
+        waveform, sr = torchaudio_load(filepath)
+
+        return waveform, filename, tag, label
+
+    def collate_fn(self, samples):
+        return default_collate(samples)
+
+
 if __name__ == "__main__":
     # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
     # print(len(vctk))
@@ -311,4 +335,12 @@ if __name__ == "__main__":
     # print(filename)
     # print(tag)
     # print(label)
+
+    vcc2020_raw = VCC2020Raw()
+    print(len(vcc2020_raw))
+    waveform, filename, tag, label = vcc2020_raw[123]
+    print(waveform.shape)
+    print(filename)
+    print(tag)
+    print(label)
     pass

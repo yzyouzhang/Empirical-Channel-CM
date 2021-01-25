@@ -61,6 +61,8 @@ class ASVspoof2019(Dataset):
                     featureTensor = padding_Tensor(featureTensor, self.feat_len)
                 elif self.padding == 'repeat':
                     featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'silence':
+                    featureTensor = silence_padding_Tensor(featureTensor, self.feat_len)
                 else:
                     raise ValueError('Padding should be zero or repeat!')
         else:
@@ -78,7 +80,7 @@ class ASVspoof2019(Dataset):
             # from torch.nn.utils.rnn import pad_sequence
             # feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
             max_len = max([sample[0].shape[1] for sample in samples]) + 1
-            feat_mat = [silence_padding_Tensor(sample[0], max_len) for sample in samples]
+            feat_mat = [repeat_padding_Tensor(sample[0], max_len) for sample in samples]
 
             tag = [sample[1] for sample in samples]
             label = [sample[2] for sample in samples]
@@ -125,6 +127,51 @@ class LibriGenuine(Dataset):
     # def collate_fn(self, samples):
     #     return default_collate(samples)
 
+class VCC2020(Dataset):
+    def __init__(self, path_to_features="/data2/neil/VCC2020/", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
+        super(VCC2020, self).__init__()
+        self.ptf = path_to_features
+        self.feat_len = feat_len
+        self.feature = feature
+        self.pad_chop = pad_chop
+        self.padding = padding
+        self.genuine_only = genuine_only
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        basename = os.path.basename(filepath)
+        all_info = basename.split(".")[0].split("_")
+        assert len(all_info) == 7
+        featureTensor = torch.load(filepath)
+        this_feat_len = featureTensor.shape[1]
+        if self.pad_chop:
+            if this_feat_len > self.feat_len:
+                startp = np.random.randint(this_feat_len - self.feat_len)
+                featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+            if this_feat_len < self.feat_len:
+                if self.padding == 'zero':
+                    featureTensor = padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'repeat':
+                    featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'silence':
+                    featureTensor = silence_padding_Tensor(featureTensor, self.feat_len)
+                else:
+                    raise ValueError('Padding should be zero or repeat!')
+        else:
+            pass
+        # filename =  "_".join(all_info[1:5])
+        tag = all_info[-2]
+        label = self.label[all_info[-1]]
+        return featureTensor, tag, label
+
+    def collate_fn(self, samples):
+        return default_collate(samples)
+
 def padding_Tensor(spec, ref_len):
     _, cur_len, width = spec.shape
     assert ref_len > cur_len
@@ -145,18 +192,25 @@ def silence_padding_Tensor(spec, ref_len):
 
 
 if __name__ == "__main__":
-    path_to_features = '/data2/neil/ASVspoof2019LA/'  # if run on GPU
-    training_set = ASVspoof2019("LA", path_to_features, 'train',
-                                'LFCC', feat_len=750, pad_chop=False, padding='repeat')
-    feat_mat, tag, label = training_set[2999]
-    print(len(training_set))
-    # print(this_len)
-    print(feat_mat.shape)
-    print(tag)
-    print(label)
+    # path_to_features = '/data2/neil/ASVspoof2019LA/'  # if run on GPU
+    # training_set = ASVspoof2019("LA", path_to_features, 'train',
+    #                             'LFCC', feat_len=750, pad_chop=False, padding='repeat')
+    # feat_mat, tag, label = training_set[2999]
+    # print(len(training_set))
+    # # print(this_len)
+    # print(feat_mat.shape)
+    # print(tag)
+    # print(label)
 
     # samples = [training_set[26], training_set[27], training_set[28], training_set[29]]
     # out = training_set.collate_fn(samples)
+
+    training_set = VCC2020()
+    feat_mat, tag, label = training_set[299]
+    print(len(training_set))
+    print(tag)
+    print(label)
+
 
     trainDataLoader = DataLoader(training_set, batch_size=32, shuffle=True, num_workers=0, collate_fn=training_set.collate_fn)
     feat_mat_batch, tags, labels = [d for d in next(iter(trainDataLoader))]

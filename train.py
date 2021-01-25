@@ -42,7 +42,7 @@ def initParams():
                         choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
     parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True, help="whether pad_chop in the dataset")
-    parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat'],
+    parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'],
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
@@ -77,6 +77,8 @@ def initParams():
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
     parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
+    parser.add_argument('--test_on_eval', action='store_true',
+                        help="whether to run EER on the evaluation set")
 
     args = parser.parse_args()
 
@@ -164,7 +166,7 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
+    trainDataLoader = DataLoader(training_set+validation_set, batch_size=int(args.batch_size * args.ratio),
                                  shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
                                shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
@@ -459,72 +461,72 @@ def train(args):
                 visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
                           epoch_num + 1, "Dev")
 
+        if args.test_on_eval:
+            with torch.no_grad():
+                ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
+                for i, (cqcc, tags, labels) in enumerate(tqdm(testDataLoader)):
+                    cqcc = cqcc.transpose(2,3).to(args.device)
+                    tags = tags.to(args.device)
+                    labels = labels.to(args.device)
 
-        with torch.no_grad():
-            ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-            for i, (cqcc, tags, labels) in enumerate(tqdm(testDataLoader)):
-                cqcc = cqcc.transpose(2,3).to(args.device)
-                tags = tags.to(args.device)
-                labels = labels.to(args.device)
+                    feats, cqcc_outputs = cqcc_model(cqcc)
 
-                feats, cqcc_outputs = cqcc_model(cqcc)
+                    if args.base_loss == "bce":
+                        cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
+                        score = cqcc_outputs[:, 0]
+                    else:
+                        cqcc_loss = criterion(cqcc_outputs, labels)
+                        score = F.softmax(cqcc_outputs, dim=1)[:, 0]
 
-                if args.base_loss == "bce":
-                    cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-                    score = cqcc_outputs[:, 0]
-                else:
-                    cqcc_loss = criterion(cqcc_outputs, labels)
-                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                    ip1_loader.append(feats)
+                    idx_loader.append((labels))
+                    tag_loader.append((tags))
 
-                ip1_loader.append(feats)
-                idx_loader.append((labels))
-                tag_loader.append((tags))
+                    if args.add_loss in [None]:
+                        testlossDict["base_loss"].append(cqcc_loss.item())
+                    elif args.add_loss in ["lgm", "center"]:
+                        testlossDict[args.add_loss].append(cqcc_loss.item())
+                    elif args.add_loss == "lgcl":
+                        outputs, moutputs = lgcl_loss(feats, labels)
+                        cqcc_loss = criterion(moutputs, labels)
+                        score = F.softmax(outputs, dim=1)[:, 0]
+                        testlossDict[args.add_loss].append(cqcc_loss.item())
+                    elif args.add_loss in ["isolate", "iso_sq"]:
+                        isoloss = iso_loss(feats, labels)
+                        score = torch.norm(feats - iso_loss.center, p=2, dim=1)
+                        testlossDict[args.add_loss].append(isoloss.item())
+                    elif args.add_loss == "ang_iso":
+                        ang_isoloss, score = ang_iso(feats, labels)
+                        testlossDict[args.add_loss].append(ang_isoloss.item())
+                    elif args.add_loss == "multi_isolate":
+                        multi_isoloss = multi_iso_loss(feats, labels)
+                        testlossDict[args.add_loss].append(multi_isoloss.item())
+                    elif args.add_loss == "multicenter_isolate":
+                        multiisoloss = multicenter_iso_loss(feats, labels)
+                        testlossDict[args.add_loss].append(multiisoloss.item())
 
-                if args.add_loss in [None]:
-                    testlossDict["base_loss"].append(cqcc_loss.item())
-                elif args.add_loss in ["lgm", "center"]:
-                    testlossDict[args.add_loss].append(cqcc_loss.item())
-                elif args.add_loss == "lgcl":
-                    outputs, moutputs = lgcl_loss(feats, labels)
-                    cqcc_loss = criterion(moutputs, labels)
-                    score = F.softmax(outputs, dim=1)[:, 0]
-                    testlossDict[args.add_loss].append(cqcc_loss.item())
-                elif args.add_loss in ["isolate", "iso_sq"]:
-                    isoloss = iso_loss(feats, labels)
-                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
-                    testlossDict[args.add_loss].append(isoloss.item())
-                elif args.add_loss == "ang_iso":
-                    ang_isoloss, score = ang_iso(feats, labels)
-                    testlossDict[args.add_loss].append(ang_isoloss.item())
-                elif args.add_loss == "multi_isolate":
-                    multi_isoloss = multi_iso_loss(feats, labels)
-                    testlossDict[args.add_loss].append(multi_isoloss.item())
-                elif args.add_loss == "multicenter_isolate":
-                    multiisoloss = multicenter_iso_loss(feats, labels)
-                    testlossDict[args.add_loss].append(multiisoloss.item())
+                    score_loader.append(score)
 
-                score_loader.append(score)
+                    # desc_str = ''
+                    # for key in sorted(testlossDict.keys()):
+                    #     desc_str += key + ':%.5f' % (np.nanmean(testlossDict[key])) + ', '
+                    # # v.set_description(desc_str)
+                    # print(desc_str)
+                scores = torch.cat(score_loader, 0).data.cpu().numpy()
+                labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+                eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+                other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+                eer = min(eer, other_eer)
 
-                # desc_str = ''
-                # for key in sorted(testlossDict.keys()):
-                #     desc_str += key + ':%.5f' % (np.nanmean(testlossDict[key])) + ', '
-                # # v.set_description(desc_str)
-                # print(desc_str)
-            scores = torch.cat(score_loader, 0).data.cpu().numpy()
-            labels = torch.cat(idx_loader, 0).data.cpu().numpy()
-            eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
-            other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
-            eer = min(eer, other_eer)
-
-            with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
-                log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
-            print("Test EER: {}".format(eer))
+                with open(os.path.join(args.out_fold, "test_loss.log"), "a") as log:
+                    log.write(str(epoch_num) + "\t" + str(np.nanmean(testlossDict[monitor_loss])) + "\t" + str(eer) + "\n")
+                print("Test EER: {}".format(eer))
 
 
         valLoss = np.nanmean(devlossDict[monitor_loss])
         # if args.add_loss == "isolate":
         #     print("isolate center: ", iso_loss.center.data)
-        if (epoch_num + 1) % 2 == 0:
+        if (epoch_num + 1) % 1 == 0:
             torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint',
                                                 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num + 1)))
             if args.add_loss == "center":
