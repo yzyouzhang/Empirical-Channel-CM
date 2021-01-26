@@ -136,6 +136,10 @@ class VCC2020(Dataset):
         self.pad_chop = pad_chop
         self.padding = padding
         self.genuine_only = genuine_only
+        self.tag = {"SOU": 20, "T01": 21, "T02": 22, "T03": 23, "T04": 24, "T05": 25, "T06": 26, "T07": 27, "T08": 28, "T09": 29,
+                    "T10": 30, "T11": 31, "T12": 32, "T13": 33, "T14": 34, "T15": 35, "T16": 36, "T17": 37, "T18": 38, "T19": 39,
+                    "T20": 40, "T21": 41, "T22": 42, "T23": 43, "T24": 44, "T25": 45, "T26": 46, "T27": 47, "T28": 48, "T29": 49,
+                    "T30": 50, "T31": 51, "T32": 52, "T33": 53}
         self.label = {"spoof": 1, "bonafide": 0}
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
 
@@ -164,8 +168,8 @@ class VCC2020(Dataset):
                     raise ValueError('Padding should be zero or repeat!')
         else:
             pass
-        # filename =  "_".join(all_info[1:5])
-        tag = all_info[-2]
+        filename =  "_".join(all_info[1:5])
+        tag = self.tag[all_info[-2]]
         label = self.label[all_info[-1]]
         return featureTensor, tag, label
 
