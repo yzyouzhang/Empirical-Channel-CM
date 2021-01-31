@@ -279,20 +279,26 @@ class ASVspoof2019Raw(Dataset):
 
 
 class VCC2020Raw(Dataset):
-    def __init__(self, path_to_database="/data2/neil/nii-yamagishilab-VCC2020-listeningtest-31f913c"):
+    def __init__(self, path_to_spoof="/data2/neil/nii-yamagishilab-VCC2020-listeningtest-31f913c", path_to_bonafide="/data2/neil/nii-yamagishilab-VCC2020-database-0b2fb2e"):
         super(VCC2020Raw, self).__init__()
-        self.ptd = path_to_database
-
-        self.all_files = librosa.util.find_files(path_to_database, ext="wav")
+        self.all_spoof = librosa.util.find_files(path_to_spoof, ext="wav")
+        self.all_bonafide = librosa.util.find_files(path_to_bonafide, ext="wav")
 
     def __len__(self):
-        return len(self.all_files)
+        # print(len(self.all_spoof), len(self.all_bonafide))
+        return len(self.all_spoof) + len(self.all_bonafide)
 
     def __getitem__(self, idx):
-        filepath = self.all_files[idx]
-        filename = os.path.basename(filepath)[:-4]
-        tag = filepath.split("/")[-3]
-        label = "spoof"
+        if idx < len(self.all_bonafide):
+            filepath = self.all_bonafide[idx]
+            label = "bonafide"
+            filename = "_".join(filepath.split("/")[-3:])[:-4]
+            tag = "-"
+        else:
+            filepath = self.all_spoof[idx - len(self.all_bonafide)]
+            filename = os.path.basename(filepath)[:-4]
+            label = "spoof"
+            tag = filepath.split("/")[-3]
         waveform, sr = torchaudio_load(filepath)
 
         return waveform, filename, tag, label

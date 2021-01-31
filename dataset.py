@@ -39,8 +39,16 @@ class ASVspoof2019(Dataset):
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
         if self.genuine_only:
             assert self.access_type == "LA"
-            num_bonafide = {"train": 2580, "dev": 2548, "eval": 7533}
-            self.all_files = self.all_files[:num_bonafide[self.part]]
+            if self.part in ["train", "dev"]:
+                num_bonafide = {"train": 2580, "dev": 2548}
+                self.all_files = self.all_files[:num_bonafide[self.part]]
+            else:
+                res = []
+                for item in self.all_files:
+                    if "bonafide" in item:
+                        res.append(item)
+                self.all_files = res
+                assert len(self.all_files) == 7355
 
     def __len__(self):
         return len(self.all_files)
@@ -70,7 +78,7 @@ class ASVspoof2019(Dataset):
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, tag, label
+        return featureTensor, filename, tag, label
 
     def collate_fn(self, samples):
         if self.pad_chop:
@@ -136,10 +144,10 @@ class VCC2020(Dataset):
         self.pad_chop = pad_chop
         self.padding = padding
         self.genuine_only = genuine_only
-        self.tag = {"SOU": 20, "T01": 21, "T02": 22, "T03": 23, "T04": 24, "T05": 25, "T06": 26, "T07": 27, "T08": 28, "T09": 29,
+        self.tag = {"-": 0, "SOU": 20, "T01": 21, "T02": 22, "T03": 23, "T04": 24, "T05": 25, "T06": 26, "T07": 27, "T08": 28, "T09": 29,
                     "T10": 30, "T11": 31, "T12": 32, "T13": 33, "T14": 34, "T15": 35, "T16": 36, "T17": 37, "T18": 38, "T19": 39,
                     "T20": 40, "T21": 41, "T22": 42, "T23": 43, "T24": 44, "T25": 45, "T26": 46, "T27": 47, "T28": 48, "T29": 49,
-                    "T30": 50, "T31": 51, "T32": 52, "T33": 53}
+                    "T30": 50, "T31": 51, "T32": 52, "T33": 53, "TAR": 54}
         self.label = {"spoof": 1, "bonafide": 0}
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
 
@@ -150,7 +158,6 @@ class VCC2020(Dataset):
         filepath = self.all_files[idx]
         basename = os.path.basename(filepath)
         all_info = basename.split(".")[0].split("_")
-        assert len(all_info) == 7
         featureTensor = torch.load(filepath)
         this_feat_len = featureTensor.shape[1]
         if self.pad_chop:
@@ -168,7 +175,6 @@ class VCC2020(Dataset):
                     raise ValueError('Padding should be zero or repeat!')
         else:
             pass
-        filename =  "_".join(all_info[1:5])
         tag = self.tag[all_info[-2]]
         label = self.label[all_info[-1]]
         return featureTensor, tag, label
