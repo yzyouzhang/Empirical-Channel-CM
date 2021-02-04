@@ -166,7 +166,7 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set+validation_set, batch_size=int(args.batch_size * args.ratio),
+    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
                                  shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
                                shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
@@ -187,7 +187,7 @@ def train(args):
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
-    feat, _, _ = training_set[23]
+    feat, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
     if args.base_loss == "ce":
@@ -253,7 +253,7 @@ def train(args):
             adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
 
-        for i, (cqcc, tags, labels) in enumerate(tqdm(trainDataLoader)):
+        for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
             cqcc = cqcc.transpose(2,3).to(args.device)
 
             if args.add_genuine:
@@ -272,12 +272,9 @@ def train(args):
             labels = labels.to(args.device)
             # this_len = this_len.to(args.device)
 
-            cqcc, tags, labels = shuffle(cqcc, tags, labels)
-            # print(cqcc.shape)
-            # print(this_len)
-            # if not args.pad_chop:
-            #     cqcc = nn.utils.rnn.pack_padded_sequence(cqcc.squeeze(1).transpose(1,2), this_len, batch_first=True, enforce_sorted=False)
-            # print(cqcc.data.shape)
+            if args.ratio < 1:
+                cqcc, tags, labels = shuffle(cqcc, tags, labels)
+
             feats, cqcc_outputs = cqcc_model(cqcc)
 
             if args.base_loss == "bce":
@@ -387,7 +384,7 @@ def train(args):
             # with trange(2) as v:
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
-            for i, (cqcc, tags, labels) in enumerate(tqdm(valDataLoader)):
+            for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -464,7 +461,7 @@ def train(args):
         if args.test_on_eval:
             with torch.no_grad():
                 ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-                for i, (cqcc, tags, labels) in enumerate(tqdm(testDataLoader)):
+                for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
                     cqcc = cqcc.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)

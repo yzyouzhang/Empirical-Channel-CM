@@ -182,6 +182,70 @@ class VCC2020(Dataset):
     def collate_fn(self, samples):
         return default_collate(samples)
 
+
+class ASVspoof2015(Dataset):
+    def __init__(self, path_to_features, part='train', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
+        super(ASVspoof2015, self).__init__()
+        self.path_to_features = path_to_features
+        self.part = part
+        self.ptf = os.path.join(path_to_features, self.part)
+        self.feat_len = feat_len
+        self.feature = feature
+        self.pad_chop = pad_chop
+        self.padding = padding
+        self.tag = {"human": 0, "S1": 1, "S2": 2, "S3": 3, "S4": 4, "S5": 5,
+                    "S6": 6, "S7": 7, "S8": 8, "S9": 9, "S10": 10}
+        self.label = {"spoof": 1, "human": 0}
+        self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        basename = os.path.basename(filepath)
+        all_info = basename.split(".")[0].split("_")
+        assert len(all_info) == 4
+        featureTensor = torch.load(filepath)
+        this_feat_len = featureTensor.shape[1]
+        if self.pad_chop:
+            if this_feat_len > self.feat_len:
+                startp = np.random.randint(this_feat_len - self.feat_len)
+                featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+            if this_feat_len < self.feat_len:
+                if self.padding == 'zero':
+                    featureTensor = padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'repeat':
+                    featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'silence':
+                    featureTensor = silence_padding_Tensor(featureTensor, self.feat_len)
+                else:
+                    raise ValueError('Padding should be zero or repeat!')
+        else:
+            pass
+        filename =  all_info[1]
+        tag = self.tag[all_info[-2]]
+        label = self.label[all_info[-1]]
+        return featureTensor, filename, tag, label
+
+    def collate_fn(self, samples):
+        if self.pad_chop:
+            return default_collate(samples)
+        else:
+            # feat_mat = [sample[0].transpose(0,1) for sample in samples]
+            # from torch.nn.utils.rnn import pad_sequence
+            # feat_mat = pad_sequence(feat_mat, True).transpose(1,2)
+            max_len = max([sample[0].shape[1] for sample in samples]) + 1
+            feat_mat = [repeat_padding_Tensor(sample[0], max_len) for sample in samples]
+
+            tag = [sample[1] for sample in samples]
+            label = [sample[2] for sample in samples]
+            # this_len = [sample[3] for sample in samples]
+
+            # return feat_mat, default_collate(tag), default_collate(label), default_collate(this_len)
+            return default_collate(feat_mat), default_collate(tag), default_collate(label)
+
+
 def padding_Tensor(spec, ref_len):
     _, cur_len, width = spec.shape
     assert ref_len > cur_len

@@ -307,6 +307,37 @@ class VCC2020Raw(Dataset):
         return default_collate(samples)
 
 
+class ASVspoof2015Raw(Dataset):
+    def __init__(self, path_to_database="/data/neil/ASVspoof2015/wav", path_to_protocol="/data/neil/ASVspoof2015/CM_protocol", part='train'):
+        super(ASVspoof2015Raw, self).__init__()
+        self.ptd = path_to_database
+        self.part = part
+        self.path_to_audio = os.path.join(self.ptd, self.part)
+        self.path_to_protocol = path_to_protocol
+        cm_pro_dict = {"train": "cm_train.trn", "dev": "cm_develop.ndx", "eval": "cm_evaluation.ndx"}
+        protocol = os.path.join(self.path_to_protocol, cm_pro_dict[self.part])
+        self.tag = {"human": 0, "S1": 1, "S2": 2, "S3": 3, "S4": 4, "S5": 5,
+                    "S6": 6, "S7": 7, "S8": 8, "S9": 9, "S10": 10}
+        self.label = {"spoof": 1, "human": 0}
+
+        with open(protocol, 'r') as f:
+            audio_info = [info.strip().split() for info in f.readlines()]
+            self.all_info = audio_info
+
+    def __len__(self):
+        return len(self.all_info)
+
+    def __getitem__(self, idx):
+        speaker, filename, tag, label = self.all_info[idx]
+        filepath = os.path.join(self.path_to_audio, speaker, filename + ".wav")
+        waveform, sr = torchaudio_load(filepath)
+        filename = filename.replace("_", "-")
+        return waveform, filename, tag, label
+
+    def collate_fn(self, samples):
+        return default_collate(samples)
+
+
 if __name__ == "__main__":
     # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
     # print(len(vctk))
@@ -342,9 +373,17 @@ if __name__ == "__main__":
     # print(tag)
     # print(label)
 
-    vcc2020_raw = VCC2020Raw()
-    print(len(vcc2020_raw))
-    waveform, filename, tag, label = vcc2020_raw[123]
+    # vcc2020_raw = VCC2020Raw()
+    # print(len(vcc2020_raw))
+    # waveform, filename, tag, label = vcc2020_raw[123]
+    # print(waveform.shape)
+    # print(filename)
+    # print(tag)
+    # print(label)
+
+    asvspoof2015 = ASVspoof2015Raw()
+    print(len(asvspoof2015))
+    waveform, filename, tag, label = asvspoof2015[123]
     print(waveform.shape)
     print(filename)
     print(tag)
