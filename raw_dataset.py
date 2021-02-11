@@ -338,6 +338,49 @@ class ASVspoof2015Raw(Dataset):
         return default_collate(samples)
 
 
+class ASVspoof2019LARaw_withChannel(Dataset):
+    def __init__(self, access_type="LA", path_to_database="/data/shared/ASVspoof2019Channel", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='train'):
+        super(ASVspoof2019LARaw_withChannel, self).__init__()
+        self.access_type = access_type
+        self.ptd = path_to_database
+        self.part = part
+        self.path_to_audio = path_to_database
+        self.path_to_protocol = path_to_protocol
+        protocol = os.path.join(self.path_to_protocol,
+                                'ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
+        if self.part == "eval":
+            protocol = os.path.join(self.ptd, access_type, 'ASVspoof2019_' + access_type +
+                                    '_cm_protocols/ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
+        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8,
+                    "A09": 9,
+                    "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17,
+                    "A18": 18,
+                    "A19": 19}
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.channel = ['amr[br=5k15]', 'amrwb[br=15k85]', 'g711[law=u]', 'g722[br=56k]',
+                        'g722[br=64k]', 'g726[law=a,br=16k]', 'g728', 'g729a', 'gsmfr',
+                        'silk[br=20k]', 'silk[br=5k]', 'silkwb[br=10k,loss=5]', 'silkwb[br=30k]']
+
+        with open(protocol, 'r') as f:
+            audio_info = [info.strip().split() for info in f.readlines()]
+            self.all_info = audio_info
+
+    def __len__(self):
+        return len(self.all_info) * len(self.channel)
+
+    def __getitem__(self, idx):
+        file_idx = idx // len(self.channel)
+        channel_idx = idx % len(self.channel)
+        speaker, filename, _, tag, label = self.all_info[file_idx]
+        channel = self.channel[channel_idx]
+        filepath = os.path.join(self.path_to_audio, filename + "_" + channel + ".wav")
+        waveform, sr = torchaudio_load(filepath)
+
+        return waveform, filename, tag, label, channel
+
+    def collate_fn(self, samples):
+        return default_collate(samples)
+
 if __name__ == "__main__":
     # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
     # print(len(vctk))
@@ -381,11 +424,12 @@ if __name__ == "__main__":
     # print(tag)
     # print(label)
 
-    asvspoof2015 = ASVspoof2015Raw()
-    print(len(asvspoof2015))
-    waveform, filename, tag, label = asvspoof2015[123]
+    asvspoof2019channel = ASVspoof2019LARaw_withChannel()
+    print(len(asvspoof2019channel))
+    waveform, filename, tag, label, channel = asvspoof2019channel[123]
     print(waveform.shape)
     print(filename)
     print(tag)
     print(label)
+    print(channel)
     pass

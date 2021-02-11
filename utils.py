@@ -433,6 +433,58 @@ def test_on_VCC(feat_model_path, loss_model_path, part, add_loss, add_external_g
 
     return eer
 
+def test_on_ASVspoof2015(feat_model_path, loss_model_path, part, add_loss, add_external_genuine=False):
+    dirname = os.path.dirname
+    basename = os.path.splitext(os.path.basename(feat_model_path))[0]
+    if "checkpoint" in dirname(feat_model_path):
+        dir_path = dirname(dirname(feat_model_path))
+    else:
+        dir_path = dirname(feat_model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = torch.load(feat_model_path)
+    # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
+    loss_model = torch.load(loss_model_path) if add_loss is not None else None
+    test_set_2015 = ASVspoof2015("/data2/neil/ASVspoof2015/", part="eval", feature="LFCC", feat_len=750, padding="repeat")
+    print(len(test_set_2015))
+    testDataLoader = DataLoader(test_set_2015, batch_size=32, shuffle=False, num_workers=0)
+    model.eval()
+    score_loader, idx_loader = [], []
+
+    with open(os.path.join(dir_path, 'checkpoint_cm_score_VCC.txt'), 'w') as cm_score_file:
+        for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+            lfcc = lfcc.transpose(2,3).to(device)
+            tags = tags.to(device)
+            labels = labels.to(device)
+
+            feats, lfcc_outputs = model(lfcc)
+
+            score = F.softmax(lfcc_outputs)[:, 0]
+            # print(score)
+
+            if add_loss == "ocsoftmax":
+                ang_isoloss, score = loss_model(feats, labels)
+            elif add_loss == "amsoftmax":
+                outputs, moutputs = loss_model(feats, labels)
+                score = F.softmax(outputs, dim=1)[:, 0]
+            else: pass
+
+            for j in range(labels.size(0)):
+                cm_score_file.write(
+                    '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
+                                          "spoof" if labels[j].data.cpu().numpy() else "bonafide",
+                                          score[j].item()))
+
+            score_loader.append(score.detach().cpu())
+            idx_loader.append(labels.detach().cpu())
+
+    scores = torch.cat(score_loader, 0).data.cpu().numpy()
+    labels = torch.cat(idx_loader, 0).data.cpu().numpy()
+    eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
+    other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
+    eer = min(eer, other_eer)
+
+    return eer
+
 def test_individual_attacks(cm_score_file):
     # Load CM scores
     cm_data = np.genfromtxt(cm_score_file, dtype=str)
@@ -443,7 +495,7 @@ def test_individual_attacks(cm_score_file):
     other_cm_scores = -cm_scores
 
     eer_cm_lst, min_tDCF_lst = [], []
-    for attack_idx in range(1, 10):
+    for attack_idx in range(1, 12):
         # Extract target, nontarget, and spoof scores from the ASV scores
 
         # Extract bona fide (real human) and spoof scores from the CM scores
@@ -465,15 +517,16 @@ if __name__ == "__main__":
     device = torch.device("cuda")
 
     # start = time.time()
-    # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
-    model_dir = "/data/neil/analyse/models0131/softmax"
-    model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
+    model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
+    # model_dir = "/data/neil/analyse/models0131/softmax"
+    model_path = os.path.join(model_dir, "anti-spoofing_lfcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     # eer = test_model(model_path, loss_model_path, "eval", None, add_external_genuine=False)
-    # eer = test_on_VCC(model_path, loss_model_path, "eval", "amsoftmax", add_external_genuine=False)
-    eer = test_model_on_PA(model_path, loss_model_path, "eval", None, add_external_genuine=False)
+    # eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    # eer = test_model_on_PA(model_path, loss_model_path, "eval", None, add_external_genuine=False)
+    eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     print(eer)
-    eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
+    eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score_VCC.txt'))
     print(eer_cm_lst)
     # print(time.time() - start)
     # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)

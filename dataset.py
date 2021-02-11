@@ -279,15 +279,15 @@ if __name__ == "__main__":
     # samples = [training_set[26], training_set[27], training_set[28], training_set[29]]
     # out = training_set.collate_fn(samples)
 
-    training_set = VCC2020()
-    feat_mat, tag, label = training_set[299]
+    training_set = ASVspoof2015("/data2/neil/ASVspoof2015/", part="eval")
+    feat_mat, _, tag, label = training_set[299]
     print(len(training_set))
     print(tag)
     print(label)
 
 
     trainDataLoader = DataLoader(training_set, batch_size=32, shuffle=True, num_workers=0, collate_fn=training_set.collate_fn)
-    feat_mat_batch, tags, labels = [d for d in next(iter(trainDataLoader))]
+    feat_mat_batch, _, tags, labels = [d for d in next(iter(trainDataLoader))]
     print(feat_mat_batch.shape)
     # print(this_len)
     # print(feat_mat_batch)

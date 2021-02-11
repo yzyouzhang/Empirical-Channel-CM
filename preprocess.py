@@ -2,8 +2,9 @@ import raw_dataset as dataset
 from feature_extraction import LFCC
 import os
 import torch
+from tqdm import tqdm
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 cuda = torch.cuda.is_available()
 print('Cuda device available: ', cuda)
@@ -70,15 +71,28 @@ device = torch.device("cuda" if cuda else "cpu")
 #     torch.save(lfccOfWav, os.path.join(target_dir, "%04d_%s_%s_%s.pt" %(idx, filename, tag, label)))
 # print("Done!")
 
-for part_ in ["train", "dev", "eval"]:
-    asvspoof_raw = dataset.ASVspoof2015Raw("/data/neil/ASVspoof2015/wav", "/data/neil/ASVspoof2015/CM_protocol", part=part_)
-    target_dir = os.path.join("/data2/neil/ASVspoof2015", part_, "LFCC")
-    lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
-    lfcc = lfcc.to(device)
-    for idx in range(len(asvspoof_raw)):
-        print("Processing", idx)
-        waveform, filename, tag, label = asvspoof_raw[idx]
-        waveform = waveform.to(device)
-        lfccOfWav = lfcc(waveform)
-        torch.save(lfccOfWav, os.path.join(target_dir, "%05d_%s_%s_%s.pt" % (idx, filename, tag, label)))
-    print("Done!")
+# for part_ in ["train", "dev", "eval"]:
+#     asvspoof_raw = dataset.ASVspoof2015Raw("/data/neil/ASVspoof2015/wav", "/data/neil/ASVspoof2015/CM_protocol", part=part_)
+#     target_dir = os.path.join("/data2/neil/ASVspoof2015", part_, "LFCC")
+#     lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+#     lfcc = lfcc.to(device)
+#     for idx in range(len(asvspoof_raw)):
+#         print("Processing", idx)
+#         waveform, filename, tag, label = asvspoof_raw[idx]
+#         waveform = waveform.to(device)
+#         lfccOfWav = lfcc(waveform)
+#         torch.save(lfccOfWav, os.path.join(target_dir, "%05d_%s_%s_%s.pt" % (idx, filename, tag, label)))
+#     print("Done!")
+
+asvspoof2019channel = dataset.ASVspoof2019LARaw_withChannel()
+print(len(asvspoof2019channel))
+target_dir = "/dataNVME/neil/ASVspoof2019LAChannel"
+lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
+lfcc = lfcc.to(device)
+for idx in tqdm(range(len(asvspoof2019channel))):
+    print("Processing", idx)
+    waveform, filename, tag, label, channel = asvspoof2019channel[idx]
+    waveform = waveform.to(device)
+    lfccOfWav = lfcc(waveform)
+    torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" %(idx, filename, tag, label, channel)))
+print("Done!")
