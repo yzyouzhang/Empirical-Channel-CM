@@ -253,7 +253,7 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_ge
     score_loader, idx_loader = [], []
 
     with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
-        for i, (lfcc, tags, labels) in enumerate(tqdm(testDataLoader)):
+        for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
             lfcc = lfcc.transpose(2,3).to(device)
             # print(lfcc.shape)
             tags = tags.to(device)
@@ -311,36 +311,8 @@ def test_model_on_PA(feat_model_path, loss_model_path, part, add_loss, add_exter
     score_loader, idx_loader = [], []
 
     with open(os.path.join(dir_path, 'checkpoint_cm_score.txt'), 'w') as cm_score_file:
-    #     for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
-    #         lfcc = lfcc.transpose(2,3).to(device)
-    #         # print(lfcc.shape)
-    #         tags = tags.to(device)
-    #         labels = labels.to(device)
-    #
-    #         feats, lfcc_outputs = model(lfcc)
-    #
-    #         score = F.softmax(lfcc_outputs)[:, 0]
-    #         # print(score)
-    #
-    #         if add_loss == "ocsoftmax":
-    #             ang_isoloss, score = loss_model(feats, labels)
-    #         elif add_loss == "amsoftmax":
-    #             outputs, moutputs = loss_model(feats, labels)
-    #             score = F.softmax(outputs, dim=1)[:, 0]
-    #         else: pass
-    #
-    #         for j in range(labels.size(0)):
-    #             # if labels[j].data.cpu().numpy():
-    #             cm_score_file.write(
-    #                 '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
-    #                                       "spoof" if labels[j].data.cpu().numpy() else "bonafide",
-    #                                       score[j].item()))
-    #
-    #         score_loader.append(score.detach().cpu())
-    #         idx_loader.append(labels.detach().cpu())
-
-        for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testLADataLoader)):
-            lfcc = lfcc.transpose(2, 3).to(device)
+        for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+            lfcc = lfcc.transpose(2,3).to(device)
             # print(lfcc.shape)
             tags = tags.to(device)
             labels = labels.to(device)
@@ -355,10 +327,10 @@ def test_model_on_PA(feat_model_path, loss_model_path, part, add_loss, add_exter
             elif add_loss == "amsoftmax":
                 outputs, moutputs = loss_model(feats, labels)
                 score = F.softmax(outputs, dim=1)[:, 0]
-            else:
-                pass
+            else: pass
 
             for j in range(labels.size(0)):
+                # if labels[j].data.cpu().numpy():
                 cm_score_file.write(
                     '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
                                           "spoof" if labels[j].data.cpu().numpy() else "bonafide",
@@ -366,6 +338,34 @@ def test_model_on_PA(feat_model_path, loss_model_path, part, add_loss, add_exter
 
             score_loader.append(score.detach().cpu())
             idx_loader.append(labels.detach().cpu())
+
+        # for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testLADataLoader)):
+        #     lfcc = lfcc.transpose(2, 3).to(device)
+        #     # print(lfcc.shape)
+        #     tags = tags.to(device)
+        #     labels = labels.to(device)
+        #
+        #     feats, lfcc_outputs = model(lfcc)
+        #
+        #     score = F.softmax(lfcc_outputs)[:, 0]
+        #     # print(score)
+        #
+        #     if add_loss == "ocsoftmax":
+        #         ang_isoloss, score = loss_model(feats, labels)
+        #     elif add_loss == "amsoftmax":
+        #         outputs, moutputs = loss_model(feats, labels)
+        #         score = F.softmax(outputs, dim=1)[:, 0]
+        #     else:
+        #         pass
+        #
+        #     for j in range(labels.size(0)):
+        #         cm_score_file.write(
+        #             '%s A%02d %s %s\n' % (audio_fn[j], tags[j].data,
+        #                                   "spoof" if labels[j].data.cpu().numpy() else "bonafide",
+        #                                   score[j].item()))
+        #
+        #     score_loader.append(score.detach().cpu())
+        #     idx_loader.append(labels.detach().cpu())
 
     scores = torch.cat(score_loader, 0).data.cpu().numpy()
     labels = torch.cat(idx_loader, 0).data.cpu().numpy()
@@ -392,8 +392,10 @@ def test_on_VCC(feat_model_path, loss_model_path, part, add_loss, add_external_g
     model = torch.load(feat_model_path)
     # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
+    test_set_LA = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA/", part,
+                                       "LFCC", feat_len=750, padding="repeat", genuine_only=False)
     test_set_VCC = VCC2020("/data2/neil/VCC2020/", "LFCC", feat_len=750, padding="repeat")
-    testDataLoader = DataLoader(test_set_VCC, batch_size=32, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set_VCC+test_set_LA, batch_size=32, shuffle=False, num_workers=0)
     model.eval()
     score_loader, idx_loader = [], []
 
@@ -495,7 +497,7 @@ def test_individual_attacks(cm_score_file):
     other_cm_scores = -cm_scores
 
     eer_cm_lst, min_tDCF_lst = [], []
-    for attack_idx in range(1, 12):
+    for attack_idx in range(0, 55):
         # Extract target, nontarget, and spoof scores from the ASV scores
 
         # Extract bona fide (real human) and spoof scores from the CM scores
@@ -521,12 +523,12 @@ if __name__ == "__main__":
     # model_dir = "/data/neil/analyse/models0131/softmax"
     model_path = os.path.join(model_dir, "anti-spoofing_lfcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    # eer = test_model(model_path, loss_model_path, "eval", None, add_external_genuine=False)
+    # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     # eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
-    # eer = test_model_on_PA(model_path, loss_model_path, "eval", None, add_external_genuine=False)
-    eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
-    print(eer)
-    eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score_VCC.txt'))
+    # eer = test_model_on_PA(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    # eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    # print(eer)
+    eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
     print(eer_cm_lst)
     # print(time.time() - start)
     # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)

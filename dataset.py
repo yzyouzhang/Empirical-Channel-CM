@@ -57,7 +57,7 @@ class ASVspoof2019(Dataset):
         filepath = self.all_files[idx]
         basename = os.path.basename(filepath)
         all_info = basename.split(".")[0].split("_")
-        assert len(all_info) == 6
+        # assert len(all_info) == 6
         featureTensor = torch.load(filepath)
         this_feat_len = featureTensor.shape[1]
         if self.pad_chop:
@@ -152,10 +152,10 @@ class VCC2020(Dataset):
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
 
     def __len__(self):
-        return len(self.all_files)
+        return len(self.all_files)-1330
 
     def __getitem__(self, idx):
-        filepath = self.all_files[idx]
+        filepath = self.all_files[idx+1330]
         basename = os.path.basename(filepath)
         all_info = basename.split(".")[0].split("_")
         featureTensor = torch.load(filepath)
@@ -177,6 +177,7 @@ class VCC2020(Dataset):
             pass
         tag = self.tag[all_info[-2]]
         label = self.label[all_info[-1]]
+        # assert label == 1
         return featureTensor, tag, label
 
     def collate_fn(self, samples):
@@ -246,6 +247,89 @@ class ASVspoof2015(Dataset):
             return default_collate(feat_mat), default_collate(tag), default_collate(label)
 
 
+class ASVspoof2019LAtrain_withChannel(Dataset):
+    def __init__(self, access_type, path_to_features='/dataNVME/neil/ASVspoof2019LAChannel/', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
+        super(ASVspoof2019LAtrain_withChannel, self).__init__()
+        self.access_type = access_type
+        self.path_to_features = path_to_features
+        self.ptf = path_to_features
+        self.feat_len = feat_len
+        self.feature = feature
+        self.pad_chop = pad_chop
+        self.padding = padding
+        self.genuine_only = genuine_only
+        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
+                  "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
+                  "A19": 19}
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.channel = {'amr[br=5k15]': 0, 'amrwb[br=15k85]': 1, 'g711[law=u]': 2, 'g722[br=56k]': 3,
+                        'g722[br=64k]': 4, 'g726[law=a,br=16k]': 5, 'g728': 6, 'g729a': 7, 'gsmfr': 8,
+                        'silk[br=20k]': 9, 'silk[br=5k]': 10, 'silkwb[br=10k,loss=5]': 11, 'silkwb[br=30k]': 12}
+        self.all_files = librosa.util.find_files(self.ptf, ext="pt")
+        if self.genuine_only:
+            pass
+
+    def __len__(self):
+        return len(self.all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.all_files[idx]
+        basename = os.path.basename(filepath)
+        all_info = basename.split(".")[0].split("_")
+        # assert len(all_info) == 7
+        featureTensor = torch.load(filepath)
+        this_feat_len = featureTensor.shape[1]
+        if self.pad_chop:
+            if this_feat_len > self.feat_len:
+                startp = np.random.randint(this_feat_len - self.feat_len)
+                featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+            if this_feat_len < self.feat_len:
+                if self.padding == 'zero':
+                    featureTensor = padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'repeat':
+                    featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                elif self.padding == 'silence':
+                    featureTensor = silence_padding_Tensor(featureTensor, self.feat_len)
+                else:
+                    raise ValueError('Padding should be zero or repeat!')
+        else:
+            pass
+        filename =  "_".join(all_info[1:4])
+        tag = self.tag[all_info[4]]
+        label = self.label[all_info[5]]
+        channel = self.channel[all_info[6]]
+        return featureTensor, filename, tag, label, channel
+
+    def collate_fn(self, samples):
+        if self.pad_chop:
+            return default_collate(samples)
+
+class ASVspoof2019LAtrain_plusChannel(Dataset):
+    def __init__(self, access_type, path_to_features, part='train', feature='LFCC', feat_len=750,
+                 pad_chop=True, padding='repeat', genuine_only=False):
+        super(ASVspoof2019LAtrain_plusChannel, self).__init__()
+        self.pad_chop = pad_chop
+        self.asvspoof2019 = ASVspoof2019(access_type, path_to_features, part,
+                               feature, feat_len, pad_chop, padding, genuine_only)
+        self.asvspoof2019channel = ASVspoof2019LAtrain_withChannel(access_type, feature='LFCC', feat_len=750,
+                 pad_chop=True, padding='repeat', genuine_only=False)
+
+    def __len__(self):
+        return len(self.asvspoof2019) + len(self.asvspoof2019channel)
+
+    def __getitem__(self, idx):
+        if idx < len(self.asvspoof2019):
+            featureTensor, filename, tag, label = self.asvspoof2019[idx]
+            channel = 13
+        else:
+            featureTensor, filename, tag, label, channel = self.asvspoof2019channel[idx - len(self.asvspoof2019)]
+        return featureTensor, filename, tag, label, channel
+
+    def collate_fn(self, samples):
+        if self.pad_chop:
+            return default_collate(samples)
+
+
 def padding_Tensor(spec, ref_len):
     _, cur_len, width = spec.shape
     assert ref_len > cur_len
@@ -279,8 +363,8 @@ if __name__ == "__main__":
     # samples = [training_set[26], training_set[27], training_set[28], training_set[29]]
     # out = training_set.collate_fn(samples)
 
-    training_set = ASVspoof2015("/data2/neil/ASVspoof2015/", part="eval")
-    feat_mat, _, tag, label = training_set[299]
+    training_set = ASVspoof2019LAtrain_withChannel("LA")
+    feat_mat, filename, tag, label, channel = training_set[299]
     print(len(training_set))
     print(tag)
     print(label)
