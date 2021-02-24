@@ -162,16 +162,30 @@ def train(args):
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
-    # training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
-    #                             args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    # training_set = ASVspoof2019LAtrain_withChannel(args.access_type,
-    #                             feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    training_set = ASVspoof2019LAtrain_plusChannel(args.access_type, args.path_to_features, 'train',
+    training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+
+    training_set_amrwb15 = ASVspoof2019LAtrain_withChannel("amrwb[br=15k85]",
+                                feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    # training_set_g72256 = ASVspoof2019LAtrain_withChannel("g722[br=56k]",
+    #                                                        feature=args.feat, feat_len=args.feat_len,
+    #                                                        pad_chop=args.pad_chop, padding=args.padding)
+    training_set_g72264 = ASVspoof2019LAtrain_withChannel("g722[br=64k]",
+                                                          feature=args.feat, feat_len=args.feat_len,
+                                                          pad_chop=args.pad_chop, padding=args.padding)
+    # training_set_silkwb10k5 = ASVspoof2019LAtrain_withChannel("silkwb[br=10k,loss=5]",
+    #                                                       feature=args.feat, feat_len=args.feat_len,
+    #                                                       pad_chop=args.pad_chop, padding=args.padding)
+    training_set_silkwb30k = ASVspoof2019LAtrain_withChannel("silkwb[br=30k]",
+                                                              feature=args.feat, feat_len=args.feat_len,
+                                                              pad_chop=args.pad_chop, padding=args.padding)
+
+    # training_set = ASVspoof2019LAtrain_plusChannel(args.access_type, args.path_to_features, 'train',
+    #                             args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
-                                 shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
+    trainDataLoader = DataLoader(training_set+training_set_amrwb15+training_set_g72264+training_set_silkwb30k, batch_size=int(args.batch_size * args.ratio),
+                                 shuffle=True, num_workers=args.num_workers, collate_fn=training_set_amrwb15.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
                                shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
 
@@ -191,8 +205,8 @@ def train(args):
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
-    feat, _, _, _, _ = training_set[23]
-    print("Feature shape", feat.shape)
+    # feat, _, _, _ = training_set[23]
+    # print("Feature shape", feat.shape)
 
     if args.base_loss == "ce":
         criterion = nn.CrossEntropyLoss()
@@ -388,7 +402,7 @@ def train(args):
             # with trange(2) as v:
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
-            for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
+            for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -465,7 +479,7 @@ def train(args):
         if args.test_on_eval:
             with torch.no_grad():
                 ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-                for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+                for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(testDataLoader)):
                     cqcc = cqcc.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)

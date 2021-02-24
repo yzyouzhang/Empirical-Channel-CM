@@ -78,7 +78,7 @@ class ASVspoof2019(Dataset):
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, filename, tag, label
+        return featureTensor, filename, tag, label, 0
 
     def collate_fn(self, samples):
         if self.pad_chop:
@@ -130,7 +130,7 @@ class LibriGenuine(Dataset):
             else:
                 raise ValueError('Padding should be zero or repeat!')
 
-        return featureTensor, 0, 0
+        return featureTensor, 'name', 0, 0
 
     # def collate_fn(self, samples):
     #     return default_collate(samples)
@@ -248,9 +248,9 @@ class ASVspoof2015(Dataset):
 
 
 class ASVspoof2019LAtrain_withChannel(Dataset):
-    def __init__(self, access_type, path_to_features='/dataNVME/neil/ASVspoof2019LAChannel/', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
+    def __init__(self, channel, path_to_features='/dataNVME/neil/ASVspoof2019LAChannel/', feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
         super(ASVspoof2019LAtrain_withChannel, self).__init__()
-        self.access_type = access_type
+        self.channel = channel
         self.path_to_features = path_to_features
         self.ptf = path_to_features
         self.feat_len = feat_len
@@ -265,7 +265,8 @@ class ASVspoof2019LAtrain_withChannel(Dataset):
         self.channel = {'amr[br=5k15]': 0, 'amrwb[br=15k85]': 1, 'g711[law=u]': 2, 'g722[br=56k]': 3,
                         'g722[br=64k]': 4, 'g726[law=a,br=16k]': 5, 'g728': 6, 'g729a': 7, 'gsmfr': 8,
                         'silk[br=20k]': 9, 'silk[br=5k]': 10, 'silkwb[br=10k,loss=5]': 11, 'silkwb[br=30k]': 12}
-        self.all_files = librosa.util.find_files(self.ptf, ext="pt")
+        all_files = librosa.util.find_files(self.ptf, ext="pt")
+        self.all_files = list(filter(lambda x: channel in x, all_files))
         if self.genuine_only:
             pass
 
@@ -363,7 +364,7 @@ if __name__ == "__main__":
     # samples = [training_set[26], training_set[27], training_set[28], training_set[29]]
     # out = training_set.collate_fn(samples)
 
-    training_set = ASVspoof2019LAtrain_withChannel("LA")
+    training_set = ASVspoof2019LAtrain_withChannel("amrwb[br=15k85]")
     feat_mat, filename, tag, label, channel = training_set[299]
     print(len(training_set))
     print(tag)
