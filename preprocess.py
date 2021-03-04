@@ -84,9 +84,9 @@ device = torch.device("cuda" if cuda else "cpu")
 #         torch.save(lfccOfWav, os.path.join(target_dir, "%05d_%s_%s_%s.pt" % (idx, filename, tag, label)))
 #     print("Done!")
 
-asvspoof2019channel = dataset.ASVspoof2019LARaw_withChannel()
+asvspoof2019channel = dataset.ASVspoof2019LARaw_withDevice()
 print(len(asvspoof2019channel))
-target_dir = "/dataNVME/neil/ASVspoof2019LAChannel"
+target_dir = "/dataNVME/neil/ASVspoof2019LADevice"
 lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
 lfcc = lfcc.to(device)
 for idx in tqdm(range(len(asvspoof2019channel))):
@@ -94,5 +94,7 @@ for idx in tqdm(range(len(asvspoof2019channel))):
     waveform, filename, tag, label, channel = asvspoof2019channel[idx]
     waveform = waveform.to(device)
     lfccOfWav = lfcc(waveform)
-    torch.save(lfccOfWav, os.path.join(target_dir, "%06d_%s_%s_%s_%s.pt" %(idx, filename, tag, label, channel)))
+    if not os.path.exists(os.path.join(target_dir, channel)):
+        os.makedirs(os.path.join(target_dir, channel))
+    torch.save(lfccOfWav, os.path.join(target_dir, channel, "%06d_%s_%s_%s_%s.pt" %(idx, filename, tag, label, channel)))
 print("Done!")

@@ -381,6 +381,50 @@ class ASVspoof2019LARaw_withChannel(Dataset):
     def collate_fn(self, samples):
         return default_collate(samples)
 
+
+class ASVspoof2019LARaw_withDevice(Dataset):
+    def __init__(self, access_type="LA", path_to_database="/data/shared/devices", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='train'):
+        super(ASVspoof2019LARaw_withDevice, self).__init__()
+        self.access_type = access_type
+        self.ptd = path_to_database
+        self.part = part
+        self.path_to_audio = path_to_database
+        self.path_to_protocol = path_to_protocol
+        protocol = os.path.join(self.path_to_protocol,
+                                'ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
+        if self.part == "eval":
+            protocol = os.path.join(self.ptd, access_type, 'ASVspoof2019_' + access_type +
+                                    '_cm_protocols/ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
+        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8,
+                    "A09": 9,
+                    "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17,
+                    "A18": 18,
+                    "A19": 19}
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
+                        'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
+                        'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000']
+
+        with open(protocol, 'r') as f:
+            audio_info = [info.strip().split() for info in f.readlines()]
+            self.all_info = audio_info
+
+    def __len__(self):
+        return len(self.all_info) * len(self.devices)
+
+    def __getitem__(self, idx):
+        file_idx = idx // len(self.devices)
+        device_idx = idx % len(self.devices)
+        speaker, filename, _, tag, label = self.all_info[file_idx]
+        device = self.devices[device_idx]
+        filepath = os.path.join(self.path_to_audio, device, filename + ".wav")
+        waveform, sr = torchaudio_load(filepath)
+
+        return waveform, filename, tag, label, device
+
+    def collate_fn(self, samples):
+        return default_collate(samples)
+
 if __name__ == "__main__":
     # vctk = VCTK_092(root="/data/neil/VCTK", download=False)
     # print(len(vctk))

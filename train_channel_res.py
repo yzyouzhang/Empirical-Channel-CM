@@ -162,7 +162,7 @@ def train(args):
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
-    training_set = ASVspoof2019LAtrain_resilient(feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    training_set = ASVspoof2019LAtrain_DeviceResilient(feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
 
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
@@ -316,9 +316,9 @@ def train(args):
                 ang_isoloss_chan, _ = ang_iso(feats_chan, labels)
                 cqcc_loss = (ang_isoloss + ang_isoloss_chan) * args.weight_loss
                 # print(cqcc_loss)
-                cr_loss = F.l1_loss(feats, feats_chan)
+                # cr_loss = F.l1_loss(feats, feats_chan)
                 # print(cr_loss)
-                cqcc_loss += cr_loss * 10
+                # cqcc_loss += cr_loss * 10
                 cqcc_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
                 trainlossDict[args.add_loss].append(ang_isoloss.item())

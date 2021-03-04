@@ -78,7 +78,7 @@ class ASVspoof2019(Dataset):
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, filename, tag, label, 0
+        return featureTensor, filename, tag, label
 
     def collate_fn(self, samples):
         if self.pad_chop:
@@ -364,14 +364,14 @@ class ASVspoof2019LAtrain_resilient(Dataset):
         rand = np.random.randint(0, 5)
         filepath_channeled = self.channeled_all_files[rand][idx]
         featureTensor_channeled = torch.load(filepath_channeled)
-        this_feat_len = featureTensor.shape[1]
+        this_feat_len = max(featureTensor.shape[1], featureTensor_channeled.shape[1])
         # print(this_feat_len)
         # print(featureTensor_channeled.shape[1])
-        if not this_feat_len == featureTensor_channeled.shape[1]:
-            if this_feat_len < featureTensor_channeled.shape[1]:
+        if not featureTensor.shape[1] == featureTensor_channeled.shape[1]:
+            if featureTensor.shape[1] < featureTensor_channeled.shape[1]:
                 featureTensor = silence_padding_Tensor(featureTensor, featureTensor_channeled.shape[1])
             else:
-                featureTensor_channeled = silence_padding_Tensor(featureTensor_channeled, this_feat_len)
+                featureTensor_channeled = silence_padding_Tensor(featureTensor_channeled, featureTensor.shape[1])
             # print(self.channel[rand])
 
         if self.pad_chop:
@@ -398,6 +398,79 @@ class ASVspoof2019LAtrain_resilient(Dataset):
         label = self.label[all_info[5]]
         channel = self.channel[rand]
         return featureTensor, featureTensor_channeled, filename, tag, label, channel
+
+    def collate_fn(self, samples):
+        if self.pad_chop:
+            return default_collate(samples)
+
+
+class ASVspoof2019LAtrain_DeviceResilient(Dataset):
+    def __init__(self, path_to_features="/data2/neil/ASVspoof2019LA/", path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice/", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
+        super(ASVspoof2019LAtrain_DeviceResilient, self).__init__()
+        self.path_to_features = path_to_features
+        self.path_to_deviced = path_to_deviced
+        self.path_to_features = path_to_features
+        self.ptf = os.path.join(path_to_features, "train")
+        self.feat_len = feat_len
+        self.feature = feature
+        self.pad_chop = pad_chop
+        self.padding = padding
+        self.genuine_only = genuine_only
+        self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
+                    "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
+                    "A19": 19}
+        self.label = {"spoof": 1, "bonafide": 0}
+        self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
+                        'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
+                        'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000']
+        self.original_all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
+        self.deviced_all_files = [librosa.util.find_files(os.path.join(self.path_to_deviced, devicex), ext="pt") for devicex in self.devices]
+
+    def __len__(self):
+        return len(self.original_all_files)
+
+    def __getitem__(self, idx):
+        filepath = self.original_all_files[idx]
+        basename = os.path.basename(filepath)
+        all_info = basename.split(".")[0].split("_")
+        featureTensor = torch.load(filepath)
+        rand = np.random.randint(0, len(self.devices))
+        filepath_deviced = self.deviced_all_files[rand][idx]
+        featureTensor_deviced = torch.load(filepath_deviced)
+        this_feat_len = max(featureTensor.shape[1], featureTensor_deviced.shape[1])
+        # print(this_feat_len)
+        # print(featureTensor_deviced.shape[1])
+        if not featureTensor.shape[1] == featureTensor_deviced.shape[1]:
+            if featureTensor.shape[1] < featureTensor_deviced.shape[1]:
+                featureTensor = silence_padding_Tensor(featureTensor, featureTensor_deviced.shape[1])
+            else:
+                featureTensor_deviced = silence_padding_Tensor(featureTensor_deviced, featureTensor.shape[1])
+            # print(self.channel[rand])
+
+        if self.pad_chop:
+            if this_feat_len > self.feat_len:
+                startp = np.random.randint(this_feat_len - self.feat_len)
+                featureTensor = featureTensor[:, startp:startp + self.feat_len, :]
+                featureTensor_deviced = featureTensor_deviced[:, startp:startp + self.feat_len, :]
+            if this_feat_len < self.feat_len:
+                if self.padding == 'zero':
+                    featureTensor = padding_Tensor(featureTensor, self.feat_len)
+                    featureTensor_deviced = padding_Tensor(featureTensor_deviced, self.feat_len)
+                elif self.padding == 'repeat':
+                    featureTensor = repeat_padding_Tensor(featureTensor, self.feat_len)
+                    featureTensor_deviced = repeat_padding_Tensor(featureTensor_deviced, self.feat_len)
+                elif self.padding == 'silence':
+                    featureTensor = silence_padding_Tensor(featureTensor, self.feat_len)
+                    featureTensor_deviced = silence_padding_Tensor(featureTensor_deviced, self.feat_len)
+                else:
+                    raise ValueError('Padding should be zero or repeat!')
+        else:
+            pass
+        filename = "_".join(all_info[1:4])
+        tag = self.tag[all_info[4]]
+        label = self.label[all_info[5]]
+        device = self.devices[rand]
+        return featureTensor, featureTensor_deviced, filename, tag, label, device
 
     def collate_fn(self, samples):
         if self.pad_chop:
