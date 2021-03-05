@@ -248,7 +248,7 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_ge
         external_genuine = LibriGenuine("/dataNVME/neil/libriTTS/train-clean-100", part="train", feature="LFCC", feat_len=750, padding="repeat")
 
         test_set += external_genuine
-    testDataLoader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set, batch_size=16, shuffle=False, num_workers=0)
     model.eval()
     score_loader, idx_loader = [], []
 
@@ -395,7 +395,7 @@ def test_on_VCC(feat_model_path, loss_model_path, part, add_loss, add_external_g
     test_set_LA = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA/", part,
                                        "LFCC", feat_len=750, padding="repeat", genuine_only=False)
     test_set_VCC = VCC2020("/data2/neil/VCC2020/", "LFCC", feat_len=750, padding="repeat")
-    testDataLoader = DataLoader(test_set_VCC+test_set_LA, batch_size=32, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set_VCC, batch_size=16, shuffle=False, num_workers=0)
     model.eval()
     score_loader, idx_loader = [], []
 
@@ -448,7 +448,7 @@ def test_on_ASVspoof2015(feat_model_path, loss_model_path, part, add_loss, add_e
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
     test_set_2015 = ASVspoof2015("/data2/neil/ASVspoof2015/", part="eval", feature="LFCC", feat_len=750, padding="repeat")
     print(len(test_set_2015))
-    testDataLoader = DataLoader(test_set_2015, batch_size=32, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set_2015, batch_size=16, shuffle=False, num_workers=0)
     model.eval()
     score_loader, idx_loader = [], []
 
@@ -520,13 +520,13 @@ if __name__ == "__main__":
 
     # start = time.time()
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
-    model_dir = "/data/neil/analyse/channel0223/plusChannel"
+    model_dir = "/data/neil/analyse/channel0303/withDevice"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
+    # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
     # eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     # eer = test_model_on_PA(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
-    # eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     print(eer)
     # eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
     # print(eer_cm_lst)

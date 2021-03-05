@@ -152,10 +152,10 @@ class VCC2020(Dataset):
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
 
     def __len__(self):
-        return len(self.all_files)-1330
+        return len(self.all_files)
 
     def __getitem__(self, idx):
-        filepath = self.all_files[idx+1330]
+        filepath = self.all_files[idx]
         basename = os.path.basename(filepath)
         all_info = basename.split(".")[0].split("_")
         featureTensor = torch.load(filepath)
