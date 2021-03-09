@@ -21,6 +21,7 @@ SampleType = Tuple[Tensor, int, str, str, str]
 
 def torchaudio_load(filepath):
     wave, sr = librosa.load(filepath, sr=16000)
+    wave = librosa.util.normalize(wave)
     waveform = torch.Tensor(np.expand_dims(wave, axis=0))
     return [waveform, sr]
 
