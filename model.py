@@ -354,6 +354,25 @@ class LCNN(nn.Module):
 
         return feat, out
 
+
+class ChannelClassifier(nn.Module):
+    def __init__(self, enc_dim, nclasses):
+        super(ChannelClassifier, self).__init__()
+        self.classifier = nn.Sequential(nn.Linear(enc_dim, enc_dim // 2),
+                                        nn.Dropout(0.3),
+                                        nn.ReLU(),
+                                        nn.Linear(enc_dim // 2, nclasses),
+                                        nn.ReLU())
+
+    def initialize_params(self):
+        for layer in self.modules():
+            if isinstance(layer, torch.nn.Linear):
+                init.kaiming_uniform_(layer.weight)
+
+    def forward(self, x):
+        return self.classifier(x)
+
+
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 

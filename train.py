@@ -5,7 +5,7 @@ import os
 import json
 import shutil
 import numpy as np
-from model import ResNet, ConvNet, LCNN
+from model import *
 from dataset import ASVspoof2019, LibriGenuine
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
@@ -74,6 +74,9 @@ def initParams():
     parser.add_argument('--visualize', action='store_true', help="feature visualization")
     parser.add_argument('--test_only', action='store_true', help="test the trained model in case the test crash sometimes or another test method")
     parser.add_argument('--continue_training', action='store_true', help="continue training with trained model")
+
+    parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use device_adversarial in training")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
     parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
@@ -161,9 +164,17 @@ def train(args):
     # cqcc_model = nn.DataParallel(cqcc_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
+    if args.device_adv:
+        classifier = ChannelClassifier(args.enc_dim, 11).to(args.device)
+        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr,
+                                      betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    if args.device_adv:
+        training_set = ASVspoof2019LAtrain_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
+                                                             path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice/",
+                                                             feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
@@ -187,7 +198,7 @@ def train(args):
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
-    feat, _, _, _ = training_set[23]
+    feat, _, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
     if args.base_loss == "ce":
@@ -253,7 +264,7 @@ def train(args):
             adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
 
-        for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(trainDataLoader)):
+        for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
             cqcc = cqcc.transpose(2,3).to(args.device)
 
             if args.add_genuine:
@@ -346,6 +357,17 @@ def train(args):
                 cqcc_optimizer.step()
                 lgcl_optimzer.step()
 
+            if args.device_adv:
+                channel = channel.to(args.device)
+                feats, _ = cqcc_model(cqcc)
+                feats = feats.detach()
+                classifier_out = classifier(feats)
+                device_loss = criterion(classifier_out, channel)
+                classifier_optimizer.zero_grad()
+                device_loss.backward()
+                classifier_optimizer.step()
+
+
             # genuine_feats.append(feats[labels==0])
             ip1_loader.append(feats)
             idx_loader.append((labels))
@@ -384,7 +406,7 @@ def train(args):
             # with trange(2) as v:
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
-            for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(valDataLoader)):
+            for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
                 # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -461,7 +483,7 @@ def train(args):
         if args.test_on_eval:
             with torch.no_grad():
                 ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-                for i, (cqcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+                for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(testDataLoader)):
                     cqcc = cqcc.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
