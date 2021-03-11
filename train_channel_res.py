@@ -500,12 +500,6 @@ def train(args):
                     elif args.add_loss == "ang_iso":
                         ang_isoloss, score = ang_iso(feats, labels)
                         testlossDict[args.add_loss].append(ang_isoloss.item())
-                    elif args.add_loss == "multi_isolate":
-                        multi_isoloss = multi_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multi_isoloss.item())
-                    elif args.add_loss == "multicenter_isolate":
-                        multiisoloss = multicenter_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multiisoloss.item())
 
                     score_loader.append(score)
 

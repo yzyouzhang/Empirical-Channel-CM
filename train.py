@@ -264,6 +264,8 @@ def train(args):
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
+        correct = 0
+        total = 0
 
         for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
             cqcc = cqcc.transpose(2,3).to(args.device)
@@ -329,10 +331,14 @@ def train(args):
                 if epoch_num > 0:
                     channel = channel.to(args.device)
                     classifier_out = classifier(feats)
+                    _, predicted = torch.max(classifier_out.data, 1)
+                    total += channel.size(0)
+                    correct += (predicted == channel).sum().item()
+
                     device_loss = criterion(classifier_out, channel)
-                    print(cqcc_loss)
+                    # print(cqcc_loss)
                     cqcc_loss -= device_loss
-                    print(device_loss)
+                    # print(device_loss)
                     trainlossDict["adv_loss"].append(device_loss.item())
                 cqcc_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
@@ -382,15 +388,25 @@ def train(args):
             idx_loader.append((labels))
             tag_loader.append((tags))
 
+            if epoch_num > 0:
+                print(100 * correct / total)
+
             # desc_str = ''
             # for key in sorted(trainlossDict.keys()):
             #     desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
             # t.set_description(desc_str)
             # print(desc_str)
 
-            with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
-                log.write(str(epoch_num) + "\t" + str(i) + "\t" +
-                          str(trainlossDict[monitor_loss][-1]) + "\n")
+            if epoch_num > 0:
+                with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
+                    log.write(str(epoch_num) + "\t" + str(i) + "\t" +
+                              str(trainlossDict["adv_loss"][-1]) + "\t" +
+                              str(100 * correct / total) + "\t" +
+                              str(trainlossDict[monitor_loss][-1]) + "\n")
+            else:
+                with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
+                    log.write(str(epoch_num) + "\t" + str(i) + "\t" +
+                              str(trainlossDict[monitor_loss][-1]) + "\n")
 
         if args.visualize and ((epoch_num+1) % 3 == 1):
             feat = torch.cat(ip1_loader, 0)
