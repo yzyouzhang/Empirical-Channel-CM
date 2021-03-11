@@ -77,6 +77,7 @@ def initParams():
 
     parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_adversarial in training")
+    parser.add_argument('--lambda_', type=float, default=1, help="lambda for gradient reversal layer")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
     parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
@@ -165,7 +166,7 @@ def train(args):
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
     if args.device_adv:
-        classifier = ChannelClassifier(args.enc_dim, 11).to(args.device)
+        classifier = ChannelClassifier(args.enc_dim, 11, args.lambda_).to(args.device)
         classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
@@ -325,6 +326,14 @@ def train(args):
             if args.add_loss == "ang_iso":
                 ang_isoloss, _ = ang_iso(feats, labels)
                 cqcc_loss = ang_isoloss * args.weight_loss
+                if epoch_num > 0:
+                    channel = channel.to(args.device)
+                    classifier_out = classifier(feats)
+                    device_loss = criterion(classifier_out, channel)
+                    print(cqcc_loss)
+                    cqcc_loss -= device_loss
+                    print(device_loss)
+                    trainlossDict["adv_loss"].append(device_loss.item())
                 cqcc_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
                 trainlossDict[args.add_loss].append(ang_isoloss.item())
