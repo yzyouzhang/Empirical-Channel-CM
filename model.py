@@ -386,9 +386,8 @@ class GradientReversal(nn.Module):
 
 
 class ChannelClassifier(nn.Module):
-    def __init__(self, enc_dim, nclasses, lambda_):
+    def __init__(self, enc_dim, nclasses):
         super(ChannelClassifier, self).__init__()
-        self.grl = GradientReversal(lambda_)
         self.classifier = nn.Sequential(nn.Linear(enc_dim, enc_dim // 2),
                                         nn.Dropout(0.3),
                                         nn.ReLU(),
@@ -401,7 +400,6 @@ class ChannelClassifier(nn.Module):
                 init.kaiming_uniform_(layer.weight)
 
     def forward(self, x):
-        x = self.grl(x)
         return self.classifier(x)
 
 

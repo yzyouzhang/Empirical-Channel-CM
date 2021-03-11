@@ -165,10 +165,6 @@ def train(args):
     # cqcc_model = nn.DataParallel(cqcc_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
-    if args.device_adv:
-        classifier = ChannelClassifier(args.enc_dim, 11, args.lambda_).to(args.device)
-        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr,
-                                      betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
@@ -176,6 +172,10 @@ def train(args):
         training_set = ASVspoof2019LAtrain_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
                                                              path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice/",
                                                              feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+        grl = GradientReversal(args.lambda_)
+        classifier = ChannelClassifier(args.enc_dim, len(training_set.devices)+1).to(args.device)
+        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr,
+                                                betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
@@ -264,8 +264,7 @@ def train(args):
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
-        correct = 0
-        total = 0
+        correct_m, total_m, correct_c, total_c = 0, 0, 0, 0
 
         for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
             cqcc = cqcc.transpose(2,3).to(args.device)
@@ -330,14 +329,15 @@ def train(args):
                 cqcc_loss = ang_isoloss * args.weight_loss
                 if epoch_num > 0:
                     channel = channel.to(args.device)
+                    feats = grl(feats)
                     classifier_out = classifier(feats)
                     _, predicted = torch.max(classifier_out.data, 1)
-                    total += channel.size(0)
-                    correct += (predicted == channel).sum().item()
+                    total_m += channel.size(0)
+                    correct_m += (predicted == channel).sum().item()
 
                     device_loss = criterion(classifier_out, channel)
                     # print(cqcc_loss)
-                    cqcc_loss -= device_loss
+                    cqcc_loss += device_loss
                     # print(device_loss)
                     trainlossDict["adv_loss"].append(device_loss.item())
                 cqcc_optimizer.zero_grad()
@@ -377,9 +377,12 @@ def train(args):
                 feats, _ = cqcc_model(cqcc)
                 feats = feats.detach()
                 classifier_out = classifier(feats)
-                device_loss = criterion(classifier_out, channel)
+                _, predicted = torch.max(classifier_out.data, 1)
+                total_c += channel.size(0)
+                correct_c += (predicted == channel).sum().item()
+                device_loss_c = criterion(classifier_out, channel)
                 classifier_optimizer.zero_grad()
-                device_loss.backward()
+                device_loss_c.backward()
                 classifier_optimizer.step()
 
 
@@ -389,7 +392,8 @@ def train(args):
             tag_loader.append((tags))
 
             if epoch_num > 0:
-                print(100 * correct / total)
+                print(100 * correct_m / total_m)
+                print(100 * correct_c / total_c)
 
             # desc_str = ''
             # for key in sorted(trainlossDict.keys()):
@@ -401,7 +405,8 @@ def train(args):
                 with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
                     log.write(str(epoch_num) + "\t" + str(i) + "\t" +
                               str(trainlossDict["adv_loss"][-1]) + "\t" +
-                              str(100 * correct / total) + "\t" +
+                              str(100 * correct_m / total_m) + "\t" +
+                              str(100 * correct_c / total_c) + "\t" +
                               str(trainlossDict[monitor_loss][-1]) + "\n")
             else:
                 with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:

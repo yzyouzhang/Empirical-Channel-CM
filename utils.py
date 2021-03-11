@@ -520,12 +520,13 @@ if __name__ == "__main__":
 
     # start = time.time()
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
-    model_dir = "/data/neil/analyse/channel0303/withDevice"
+    model_dir = "/data/neil/analyse/channel0310/withDevice_adversarial_both"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
-    # eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     # eer = test_model_on_PA(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    print(eer)
     eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     print(eer)
     # eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))

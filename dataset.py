@@ -497,8 +497,8 @@ class ASVspoof2019LAtrain_DeviceAdversarial(Dataset):
         # self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
         #                 'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
         #                 'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000']
-        self.devices = ['AKSPKRS80sUk002-16000', 'Doremi-16000',
-                        'ResloRBRedLabel-16000', 'BehritoneirRecording-16000',
+        self.devices = ['Doremi-16000',
+                        'ResloRBRedLabel-16000',
                         'SonyC37Fet-16000']
         self.original_all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
         self.deviced_all_files = [librosa.util.find_files(os.path.join(self.path_to_deviced, devicex), ext="pt") for devicex in self.devices]
