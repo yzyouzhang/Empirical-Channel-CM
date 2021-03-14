@@ -54,7 +54,7 @@ def initParams():
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
-    parser.add_argument('--interval', type=int, default=10, help="interval to decay lr")
+    parser.add_argument('--interval', type=int, default=100, help="interval to decay lr")
 
     parser.add_argument('--beta_1', type=float, default=0.9, help="bata_1 for Adam")
     parser.add_argument('--beta_2', type=float, default=0.999, help="beta_2 for Adam")
@@ -77,7 +77,8 @@ def initParams():
 
     parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_adversarial in training")
-    parser.add_argument('--lambda_', type=float, default=1, help="lambda for gradient reversal layer")
+    parser.add_argument('--lambda_', type=float, default=0.1, help="lambda for gradient reversal layer")
+    parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
     parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
@@ -135,8 +136,8 @@ def initParams():
 
     return args
 
-def adjust_learning_rate(args, optimizer, epoch_num):
-    lr = args.lr * (args.lr_decay ** (epoch_num // args.interval))
+def adjust_learning_rate(args, lr, optimizer, epoch_num):
+    lr = lr * (args.lr_decay ** (epoch_num // args.interval))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
@@ -174,7 +175,7 @@ def train(args):
                                                              feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
         grl = GradientReversal(args.lambda_)
         classifier = ChannelClassifier(args.enc_dim, len(training_set.devices)+1).to(args.device)
-        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr,
+        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr_d,
                                                 betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
@@ -258,11 +259,13 @@ def train(args):
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
         testlossDict = defaultdict(list)
-        adjust_learning_rate(args, cqcc_optimizer, epoch_num)
+        adjust_learning_rate(args, args.lr, cqcc_optimizer, epoch_num)
         if args.add_loss == "isolate":
-            adjust_learning_rate(args, iso_optimzer, epoch_num)
+            adjust_learning_rate(args, args.lr, iso_optimzer, epoch_num)
         if args.add_loss == "ang_iso":
-            adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
+            adjust_learning_rate(args, args.lr, ang_iso_optimzer, epoch_num)
+        if args.device_adv:
+            adjust_learning_rate(args, args.lr_d, classifier_optimizer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
@@ -335,11 +338,10 @@ def train(args):
                     _, predicted = torch.max(classifier_out.data, 1)
                     total_m += channel.size(0)
                     correct_m += (predicted == channel).sum().item()
-
                     device_loss = criterion(classifier_out, channel)
-                    # print(cqcc_loss)
+                    # print(cqcc_loss.item())
                     cqcc_loss += device_loss
-                    # print(device_loss)
+                    # print(device_loss.item())
                     trainlossDict["adv_loss"].append(device_loss.item())
                 cqcc_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
@@ -377,6 +379,7 @@ def train(args):
                 channel = channel.to(args.device)
                 feats, _ = cqcc_model(cqcc)
                 feats = feats.detach()
+                feats = grl(feats)
                 classifier_out = classifier(feats)
                 _, predicted = torch.max(classifier_out.data, 1)
                 total_c += channel.size(0)
@@ -509,10 +512,13 @@ def train(args):
                     log.write(str(epoch_num) + "\t"+ "\t" +
                               str(np.nanmean(devlossDict["adv_loss"])) + "\t" +
                               str(100 * correct_v / total_v) + "\t" +
-                              str(np.nanmean(devlossDict[monitor_loss])) + "\n")
+                              str(np.nanmean(devlossDict[monitor_loss])) + "\t" +
+                              str(eer) + "\n")
             else:
                 with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
-                    log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[monitor_loss])) + "\t" + str(eer) +"\n")
+                    log.write(str(epoch_num) + "\t" +
+                              str(np.nanmean(devlossDict[monitor_loss])) + "\t" +
+                              str(eer) +"\n")
             print("Val EER: {}".format(eer))
 
             if args.visualize and ((epoch_num+1) % 3 == 1):
