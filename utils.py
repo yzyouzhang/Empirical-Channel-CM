@@ -515,12 +515,13 @@ def test_individual_attacks(cm_score_file):
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     device = torch.device("cuda")
 
     # start = time.time()
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
-    model_dir = "/data/neil/analyse/channel0310/withDevice_adversarial_both"
+    # model_dir = "/data/neil/analyse/channel0303/withDevice"
+    model_dir = "/data/neil/analyse/channel0310/withDevice_adversarial_correct"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)

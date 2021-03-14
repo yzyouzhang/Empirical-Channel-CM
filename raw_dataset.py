@@ -384,7 +384,7 @@ class ASVspoof2019LARaw_withChannel(Dataset):
 
 
 class ASVspoof2019LARaw_withDevice(Dataset):
-    def __init__(self, access_type="LA", path_to_database="/data/shared/devices", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='train'):
+    def __init__(self, access_type="LA", path_to_database="/data/shared/antispoofying2019-dev/devices", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='dev'):
         super(ASVspoof2019LARaw_withDevice, self).__init__()
         self.access_type = access_type
         self.ptd = path_to_database

@@ -50,7 +50,7 @@ def initParams():
                         choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
 
     # Training hyperparameters
-    parser.add_argument('--num_epochs', type=int, default=200, help="Number of epochs for training")
+    parser.add_argument('--num_epochs', type=int, default=1000, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
     parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
@@ -264,9 +264,10 @@ def train(args):
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, ang_iso_optimzer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
-        correct_m, total_m, correct_c, total_c = 0, 0, 0, 0
+        correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
         for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
+            if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
             cqcc = cqcc.transpose(2,3).to(args.device)
 
             if args.add_genuine:
@@ -391,9 +392,9 @@ def train(args):
             idx_loader.append((labels))
             tag_loader.append((tags))
 
-            if epoch_num > 0:
-                print(100 * correct_m / total_m)
-                print(100 * correct_c / total_c)
+            # if epoch_num > 0:
+            #     print(100 * correct_m / total_m)
+            #     print(100 * correct_c / total_c)
 
             # desc_str = ''
             # for key in sorted(trainlossDict.keys()):
@@ -480,6 +481,15 @@ def train(args):
                 elif args.add_loss == "ang_iso":
                     ang_isoloss, score = ang_iso(feats, labels)
                     devlossDict[args.add_loss].append(ang_isoloss.item())
+                    if epoch_num > 0:
+                        channel = channel.to(args.device)
+                        feats = grl(feats)
+                        classifier_out = classifier(feats)
+                        _, predicted = torch.max(classifier_out.data, 1)
+                        total_v += channel.size(0)
+                        correct_v += (predicted == channel).sum().item()
+                        device_loss = criterion(classifier_out, channel)
+                        devlossDict["adv_loss"].append(device_loss.item())
 
                 score_loader.append(score)
 
@@ -494,8 +504,15 @@ def train(args):
             other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
             eer = min(eer, other_eer)
 
-            with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
-                log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[monitor_loss])) + "\t" + str(eer) +"\n")
+            if epoch_num > 0:
+                with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
+                    log.write(str(epoch_num) + "\t"+ "\t" +
+                              str(np.nanmean(devlossDict["adv_loss"])) + "\t" +
+                              str(100 * correct_v / total_v) + "\t" +
+                              str(np.nanmean(devlossDict[monitor_loss])) + "\n")
+            else:
+                with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
+                    log.write(str(epoch_num) + "\t" + str(np.nanmean(devlossDict[monitor_loss])) + "\t" + str(eer) +"\n")
             print("Val EER: {}".format(eer))
 
             if args.visualize and ((epoch_num+1) % 3 == 1):
@@ -626,9 +643,9 @@ def train(args):
         else:
             early_stop_cnt += 1
 
-        if early_stop_cnt == 100:
+        if early_stop_cnt == 500:
             with open(os.path.join(args.out_fold, 'args.json'), 'a') as res_file:
-                res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 19))
+                res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 499))
             break
         # if early_stop_cnt == 1:
         #     torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')

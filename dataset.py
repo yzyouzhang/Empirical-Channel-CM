@@ -479,7 +479,7 @@ class ASVspoof2019LAtrain_DeviceResilient(Dataset):
 
 
 class ASVspoof2019LAtrain_DeviceAdversarial(Dataset):
-    def __init__(self, path_to_features="/data2/neil/ASVspoof2019LA/", path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice/", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
+    def __init__(self, path_to_features="/data2/neil/ASVspoof2019LA/", path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
         super(ASVspoof2019LAtrain_DeviceAdversarial, self).__init__()
         self.path_to_features = path_to_features
         self.path_to_deviced = path_to_deviced
@@ -494,12 +494,12 @@ class ASVspoof2019LAtrain_DeviceAdversarial(Dataset):
                     "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
                     "A19": 19}
         self.label = {"spoof": 1, "bonafide": 0}
-        # self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
-        #                 'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
-        #                 'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000']
-        self.devices = ['Doremi-16000',
-                        'ResloRBRedLabel-16000',
-                        'SonyC37Fet-16000']
+        self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
+                        'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
+                        'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000']
+        # self.devices = ['Doremi-16000',
+        #                 'ResloRBRedLabel-16000',
+        #                 'SonyC37Fet-16000']
         self.original_all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
         self.deviced_all_files = [librosa.util.find_files(os.path.join(self.path_to_deviced, devicex), ext="pt") for devicex in self.devices]
 
