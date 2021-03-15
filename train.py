@@ -52,7 +52,7 @@ def initParams():
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=1000, help="Number of epochs for training")
     parser.add_argument('--batch_size', type=int, default=64, help="Mini batch size for training")
-    parser.add_argument('--lr', type=float, default=0.0003, help="learning rate")
+    parser.add_argument('--lr', type=float, default=0.0005, help="learning rate")
     parser.add_argument('--lr_decay', type=float, default=0.5, help="decay learning rate")
     parser.add_argument('--interval', type=int, default=100, help="interval to decay lr")
 
@@ -78,7 +78,7 @@ def initParams():
     parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_adversarial in training")
     parser.add_argument('--lambda_', type=float, default=0.1, help="lambda for gradient reversal layer")
-    parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
+    parser.add_argument('--lr_d', type=float, default=0.0003, help="learning rate")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
     parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
@@ -169,16 +169,22 @@ def train(args):
 
     training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-    if args.device_adv:
-        training_set = ASVspoof2019LAtrain_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
-                                                             path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice/",
-                                                             feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-        grl = GradientReversal(args.lambda_)
-        classifier = ChannelClassifier(args.enc_dim, len(training_set.devices)+1).to(args.device)
-        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr_d,
-                                                betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    if args.device_adv:
+        training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
+                                                        path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
+                                                        part="train",
+                                                        feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+        # grl = GradientReversal(args.lambda_)
+        classifier = ChannelClassifier(args.enc_dim, len(training_set.devices)+1, args.lambda_).to(args.device)
+        classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr_d,
+                                                betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
+        validation_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
+                                                          path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
+                                                          part="dev",
+                                                          feature=args.feat, feat_len=args.feat_len,
+                                                          pad_chop=args.pad_chop, padding=args.padding)
     trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
                                  shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
@@ -333,7 +339,7 @@ def train(args):
                 cqcc_loss = ang_isoloss * args.weight_loss
                 if epoch_num > 0:
                     channel = channel.to(args.device)
-                    feats = grl(feats)
+                    # feats = grl(feats)
                     classifier_out = classifier(feats)
                     _, predicted = torch.max(classifier_out.data, 1)
                     total_m += channel.size(0)
@@ -379,7 +385,7 @@ def train(args):
                 channel = channel.to(args.device)
                 feats, _ = cqcc_model(cqcc)
                 feats = feats.detach()
-                feats = grl(feats)
+                # feats = grl(feats)
                 classifier_out = classifier(feats)
                 _, predicted = torch.max(classifier_out.data, 1)
                 total_c += channel.size(0)
@@ -441,7 +447,7 @@ def train(args):
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
             for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
-                # cqcc, audio_fn, tags, labels = [d for d in next(iter(valDataLoader))]
+                if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
                 if args.ratio < 1:

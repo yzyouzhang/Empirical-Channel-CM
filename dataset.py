@@ -478,13 +478,14 @@ class ASVspoof2019LAtrain_DeviceResilient(Dataset):
             return default_collate(samples)
 
 
-class ASVspoof2019LAtrain_DeviceAdversarial(Dataset):
-    def __init__(self, path_to_features="/data2/neil/ASVspoof2019LA/", path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
-        super(ASVspoof2019LAtrain_DeviceAdversarial, self).__init__()
+class ASVspoof2019LA_DeviceAdversarial(Dataset):
+    def __init__(self, path_to_features="/data2/neil/ASVspoof2019LA/", path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice", part="train", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
+        super(ASVspoof2019LA_DeviceAdversarial, self).__init__()
         self.path_to_features = path_to_features
-        self.path_to_deviced = path_to_deviced
+        suffix = {"train" : "", "dev":"Dev"}
+        self.path_to_deviced = path_to_deviced + suffix[part]
         self.path_to_features = path_to_features
-        self.ptf = os.path.join(path_to_features, "train")
+        self.ptf = os.path.join(path_to_features, part)
         self.feat_len = feat_len
         self.feature = feature
         self.pad_chop = pad_chop

@@ -395,7 +395,7 @@ def test_on_VCC(feat_model_path, loss_model_path, part, add_loss, add_external_g
     test_set_LA = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA/", part,
                                        "LFCC", feat_len=750, padding="repeat", genuine_only=False)
     test_set_VCC = VCC2020("/data2/neil/VCC2020/", "LFCC", feat_len=750, padding="repeat")
-    testDataLoader = DataLoader(test_set_VCC, batch_size=16, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set_VCC, batch_size=4, shuffle=False, num_workers=0)
     model.eval()
     score_loader, idx_loader = [], []
 
@@ -521,7 +521,7 @@ if __name__ == "__main__":
     # start = time.time()
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
     # model_dir = "/data/neil/analyse/channel0303/withDevice"
-    model_dir = "/data/neil/analyse/channel0310/withDevice_adversarial_correct"
+    model_dir = "/data/neil/analyse/channel0314/withDevice_adversarial_0.1"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
