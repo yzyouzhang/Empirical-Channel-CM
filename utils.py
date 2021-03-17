@@ -230,6 +230,9 @@ def walk_files(root: str,
 
                 yield f
 
+def plot_score_dist():
+    pass
+
 def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_genuine=False):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
@@ -448,7 +451,7 @@ def test_on_ASVspoof2015(feat_model_path, loss_model_path, part, add_loss, add_e
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
     test_set_2015 = ASVspoof2015("/data2/neil/ASVspoof2015/", part="eval", feature="LFCC", feat_len=750, padding="repeat")
     print(len(test_set_2015))
-    testDataLoader = DataLoader(test_set_2015, batch_size=16, shuffle=False, num_workers=0)
+    testDataLoader = DataLoader(test_set_2015, batch_size=4, shuffle=False, num_workers=0)
     model.eval()
     score_loader, idx_loader = [], []
 
@@ -521,7 +524,7 @@ if __name__ == "__main__":
     # start = time.time()
     # model_dir = "/data/neil/antiRes/models1028/ocsoftmax"
     # model_dir = "/data/neil/analyse/channel0303/withDevice"
-    model_dir = "/data/neil/analyse/channel0314/withDevice_adversarial_0.1"
+    model_dir = "/data/neil/analyse/channel0314/withDevice_adversarial_withval"
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)

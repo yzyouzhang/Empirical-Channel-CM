@@ -4,7 +4,7 @@ import os
 import torch
 from tqdm import tqdm
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 cuda = torch.cuda.is_available()
 print('Cuda device available: ', cuda)
@@ -155,7 +155,7 @@ def spectral_whitening(tr, smooth=None, filter=None,
 
 asvspoof2019channel = dataset.ASVspoof2019LARaw_withDevice()
 print(len(asvspoof2019channel))
-target_dir = "/dataNVME/neil/ASVspoof2019LADeviceDev"
+target_dir = "/dataNVME/neil/ASVspoof2019LADeviceEval"
 lfcc = LFCC(320, 160, 512, 16000, 20, with_energy=False)
 lfcc = lfcc.to(device)
 for idx in tqdm(range(len(asvspoof2019channel))):

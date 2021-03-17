@@ -384,7 +384,7 @@ class ASVspoof2019LARaw_withChannel(Dataset):
 
 
 class ASVspoof2019LARaw_withDevice(Dataset):
-    def __init__(self, access_type="LA", path_to_database="/data/shared/antispoofying2019-dev/devices", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='dev'):
+    def __init__(self, access_type="LA", path_to_database="/data/shared/antispoofying2019-eval", path_to_protocol="/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/", part='eval'):
         super(ASVspoof2019LARaw_withDevice, self).__init__()
         self.access_type = access_type
         self.ptd = path_to_database
@@ -393,9 +393,9 @@ class ASVspoof2019LARaw_withDevice(Dataset):
         self.path_to_protocol = path_to_protocol
         protocol = os.path.join(self.path_to_protocol,
                                 'ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
-        if self.part == "eval":
-            protocol = os.path.join(self.ptd, access_type, 'ASVspoof2019_' + access_type +
-                                    '_cm_protocols/ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
+        # if self.part == "eval":
+        #     protocol = os.path.join(self.ptd, access_type, 'ASVspoof2019_' + access_type +
+        #                             '_cm_protocols/ASVspoof2019.' + access_type + '.cm.' + self.part + '.trl.txt')
         self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8,
                     "A09": 9,
                     "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17,
@@ -404,7 +404,7 @@ class ASVspoof2019LARaw_withDevice(Dataset):
         self.label = {"spoof": 1, "bonafide": 0}
         self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
                         'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
-                        'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000']
+                        'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000', 'iPadirRecording-16000', 'iPhoneirRecording-16000']
 
         with open(protocol, 'r') as f:
             audio_info = [info.strip().split() for info in f.readlines()]

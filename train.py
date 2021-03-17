@@ -492,7 +492,7 @@ def train(args):
                     devlossDict[args.add_loss].append(ang_isoloss.item())
                     if epoch_num > 0:
                         channel = channel.to(args.device)
-                        feats = grl(feats)
+                        # feats = grl(feats)
                         classifier_out = classifier(feats)
                         _, predicted = torch.max(classifier_out.data, 1)
                         total_v += channel.size(0)
