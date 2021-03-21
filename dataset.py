@@ -79,7 +79,7 @@ class ASVspoof2019(Dataset):
         filename =  "_".join(all_info[1:4])
         tag = self.tag[all_info[4]]
         label = self.label[all_info[5]]
-        return featureTensor, filename, tag, label, 0
+        return featureTensor, filename, tag, label, 2019
 
     def collate_fn(self, samples):
         if self.pad_chop:
@@ -179,7 +179,7 @@ class VCC2020(Dataset):
         tag = self.tag[all_info[-2]]
         label = self.label[all_info[-1]]
         # assert label == 1
-        return featureTensor, tag, label
+        return featureTensor, basename, tag, label, 2020
 
     def collate_fn(self, samples):
         return default_collate(samples)
@@ -228,7 +228,7 @@ class ASVspoof2015(Dataset):
         filename =  all_info[1]
         tag = self.tag[all_info[-2]]
         label = self.label[all_info[-1]]
-        return featureTensor, filename, tag, label
+        return featureTensor, filename, tag, label, 2015
 
     def collate_fn(self, samples):
         if self.pad_chop:
@@ -482,7 +482,7 @@ class ASVspoof2019LA_DeviceAdversarial(Dataset):
     def __init__(self, path_to_features="/data2/neil/ASVspoof2019LA/", path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice", part="train", feature='LFCC', feat_len=750, pad_chop=True, padding='repeat', genuine_only=False):
         super(ASVspoof2019LA_DeviceAdversarial, self).__init__()
         self.path_to_features = path_to_features
-        suffix = {"train" : "", "dev":"Dev"}
+        suffix = {"train" : "", "dev":"Dev", "eval": "Eval"}
         self.path_to_deviced = path_to_deviced + suffix[part]
         self.path_to_features = path_to_features
         self.ptf = os.path.join(path_to_features, part)
@@ -498,6 +498,10 @@ class ASVspoof2019LA_DeviceAdversarial(Dataset):
         self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
                         'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
                         'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000']
+        if part == "eval":
+            self.devices = ['AKSPKRS80sUk002-16000', 'AKSPKRSVinUk002-16000', 'Doremi-16000', 'RCAPB90-16000',
+                        'ResloRBRedLabel-16000', 'AKSPKRSSpeaker002-16000', 'BehritoneirRecording-16000',
+                        'OktavaML19-16000', 'ResloRB250-16000', 'SonyC37Fet-16000',  'iPadirRecording-16000', 'iPhoneirRecording-16000']
         # self.devices = ['Doremi-16000',
         #                 'ResloRBRedLabel-16000',
         #                 'SonyC37Fet-16000']

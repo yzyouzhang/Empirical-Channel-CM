@@ -78,7 +78,7 @@ def initParams():
     parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_adversarial in training")
     parser.add_argument('--lambda_', type=float, default=0.1, help="lambda for gradient reversal layer")
-    parser.add_argument('--lr_d', type=float, default=0.0003, help="learning rate")
+    parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
     parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
