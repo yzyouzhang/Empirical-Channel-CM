@@ -276,7 +276,8 @@ def train(args):
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
         for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
-            if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
+            if args.device_adv:
+                if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
             cqcc = cqcc.transpose(2,3).to(args.device)
 
             if args.add_genuine:
@@ -305,7 +306,7 @@ def train(args):
             else:
                 cqcc_loss = criterion(cqcc_outputs, labels)
 
-            trainlossDict["base_loss"].append(cqcc_loss.item())
+            trainlossDict['base_loss'].append(cqcc_loss.item())
 
             if args.add_loss == None:
                 cqcc_optimizer.zero_grad()
@@ -411,7 +412,7 @@ def train(args):
             # t.set_description(desc_str)
             # print(desc_str)
 
-            if epoch_num > 0:
+            if epoch_num > 0 and args.device_adv:
                 with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
                     log.write(str(epoch_num) + "\t" + str(i) + "\t" +
                               str(trainlossDict["adv_loss"][-1]) + "\t" +
@@ -447,7 +448,8 @@ def train(args):
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
             for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
-                if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
+                if args.device_adv:
+                    if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
                 if args.ratio < 1:
@@ -513,7 +515,7 @@ def train(args):
             other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
             eer = min(eer, other_eer)
 
-            if epoch_num > 0:
+            if epoch_num > 0 and args.device_adv:
                 with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                     log.write(str(epoch_num) + "\t"+ "\t" +
                               str(np.nanmean(devlossDict["adv_loss"])) + "\t" +
