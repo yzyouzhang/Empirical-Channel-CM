@@ -77,6 +77,8 @@ def initParams():
 
     parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_adversarial in training")
+    parser.add_argument('--device_aug', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use device_augmentation in training")
     parser.add_argument('--lambda_', type=float, default=0.1, help="lambda for gradient reversal layer")
     parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
@@ -171,6 +173,17 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    if args.device_aug:
+        training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
+                                                        path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
+                                                        part="train",
+                                                        feature=args.feat, feat_len=args.feat_len,
+                                                        pad_chop=args.pad_chop, padding=args.padding)
+        validation_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
+                                                          path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
+                                                          part="dev",
+                                                          feature=args.feat, feat_len=args.feat_len,
+                                                          pad_chop=args.pad_chop, padding=args.padding)
     if args.device_adv:
         training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
                                                         path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
@@ -276,7 +289,7 @@ def train(args):
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
         for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
-            if args.device_adv:
+            if args.device_adv or args.device_aug:
                 if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
             cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -338,7 +351,7 @@ def train(args):
             if args.add_loss == "ang_iso":
                 ang_isoloss, _ = ang_iso(feats, labels)
                 cqcc_loss = ang_isoloss * args.weight_loss
-                if epoch_num > 0:
+                if epoch_num > 0 and args.device_adv:
                     channel = channel.to(args.device)
                     # feats = grl(feats)
                     classifier_out = classifier(feats)
@@ -448,7 +461,7 @@ def train(args):
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
             for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
-                if args.device_adv:
+                if args.device_adv or args.device_aug:
                     if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -492,7 +505,7 @@ def train(args):
                 elif args.add_loss == "ang_iso":
                     ang_isoloss, score = ang_iso(feats, labels)
                     devlossDict[args.add_loss].append(ang_isoloss.item())
-                    if epoch_num > 0:
+                    if epoch_num > 0 and args.device_adv:
                         channel = channel.to(args.device)
                         # feats = grl(feats)
                         classifier_out = classifier(feats)
