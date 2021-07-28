@@ -63,7 +63,7 @@ def initParams():
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
     parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce"], help="use which loss for basic training")
-    parser.add_argument('--add_loss', type=str, default=None,
+    parser.add_argument('--add_loss', type=str, default="ang_iso",
                         choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
@@ -326,28 +326,6 @@ def train(args):
                 cqcc_loss.backward()
                 cqcc_optimizer.step()
 
-            if args.add_loss == "center":
-                centerloss = centerLoss(feats, labels)
-                cqcc_loss += centerloss * args.weight_loss
-                cqcc_optimizer.zero_grad()
-                center_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(cqcc_loss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                # for param in centerLoss.parameters():
-                #     param.grad.data *= (1. / args.weight_loss)
-                center_optimzer.step()
-
-            if args.add_loss in ["isolate", "iso_sq"]:
-                isoloss = iso_loss(feats, labels)
-                cqcc_loss = isoloss * args.weight_loss
-                cqcc_optimizer.zero_grad()
-                iso_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(isoloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                iso_optimzer.step()
-
             if args.add_loss == "ang_iso":
                 ang_isoloss, _ = ang_iso(feats, labels)
                 cqcc_loss = ang_isoloss * args.weight_loss
@@ -370,31 +348,6 @@ def train(args):
                 cqcc_optimizer.step()
                 ang_iso_optimzer.step()
 
-            if args.add_loss == "lgm":
-                outputs, moutputs, likelihood = lgm_loss(feats, labels)
-                cqcc_loss = criterion(moutputs, labels)
-                trainlossDict["base_loss"].append(cqcc_loss.item())
-                lgmloss = 0.5 * likelihood
-                # print(criterion(moutputs, labels).data, likelihood.data)
-                cqcc_optimizer.zero_grad()
-                lgm_optimzer.zero_grad()
-                cqcc_loss += lgmloss
-                trainlossDict[args.add_loss].append(lgmloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                lgm_optimzer.step()
-
-            if args.add_loss == "lgcl":
-                outputs, moutputs = lgcl_loss(feats, labels)
-                cqcc_loss = criterion(moutputs, labels)
-                # print(criterion(moutputs, labels).data)
-                trainlossDict[args.add_loss].append(cqcc_loss.item())
-                cqcc_optimizer.zero_grad()
-                lgcl_optimzer.zero_grad()
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
-                lgcl_optimzer.step()
-
             if args.device_adv:
                 channel = channel.to(args.device)
                 feats, _ = cqcc_model(cqcc)
@@ -409,21 +362,10 @@ def train(args):
                 device_loss_c.backward()
                 classifier_optimizer.step()
 
-
-            # genuine_feats.append(feats[labels==0])
             ip1_loader.append(feats)
             idx_loader.append((labels))
             tag_loader.append((tags))
 
-            # if epoch_num > 0:
-            #     print(100 * correct_m / total_m)
-            #     print(100 * correct_c / total_c)
-
-            # desc_str = ''
-            # for key in sorted(trainlossDict.keys()):
-            #     desc_str += key + ':%.5f' % (np.nanmean(trainlossDict[key])) + ', '
-            # t.set_description(desc_str)
-            # print(desc_str)
 
             if epoch_num > 0 and args.device_adv:
                 with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
