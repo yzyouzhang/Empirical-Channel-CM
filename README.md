@@ -1,6 +1,8 @@
 # An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems
 
-The code is currently not very organized. We will put more details here amd also release the dataset we augmented with a link here.
+Thanks for your interest in our work!
+
+The code is currently not very organized. We will put more details here and also release the dataset we augmented with a link here.
 Stay tuned!
 
 ## Citation

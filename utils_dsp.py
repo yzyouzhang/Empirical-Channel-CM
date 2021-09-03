@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+
+## Adapted from https://github.com/nii-yamagishilab/project-NN-Pytorch-scripts/blob/newfunctions/
+
+
 """
 util_dsp.py
 Utilities for signal processing

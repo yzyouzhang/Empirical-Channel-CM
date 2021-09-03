@@ -208,6 +208,11 @@ def train(args):
     else:
         assert False
 
+    if args.add_loss == "ang_iso":
+        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
+        ang_iso.train()
+        ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
+
     early_stop_cnt = 0
     prev_loss = 1e8
     add_size = args.batch_size - int(args.batch_size * args.ratio)
@@ -238,24 +243,9 @@ def train(args):
                 if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
             cqcc = cqcc.transpose(2,3).to(args.device)
 
-            if args.add_genuine:
-                featTensor, _, _, _ = next(iter(trainGenDataLoader))
-                cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
-                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
-
-            if args.ratio < 1:
-                featTensor, _, _ = next(iter(libriDataLoader_train))
-                cqcc = torch.cat((cqcc, featTensor.transpose(2,3)), 0)
-                tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-                labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
-
             tags = tags.to(args.device)
             labels = labels.to(args.device)
             # this_len = this_len.to(args.device)
-
-            if args.ratio < 1:
-                cqcc, tags, labels = shuffle(cqcc, tags, labels)
 
             feats, cqcc_outputs = cqcc_model(cqcc)
 
@@ -418,29 +408,9 @@ def train(args):
                     idx_loader.append((labels))
                     tag_loader.append((tags))
 
-                    if args.add_loss in [None]:
-                        testlossDict["base_loss"].append(cqcc_loss.item())
-                    elif args.add_loss in ["lgm", "center"]:
-                        testlossDict[args.add_loss].append(cqcc_loss.item())
-                    elif args.add_loss == "lgcl":
-                        outputs, moutputs = lgcl_loss(feats, labels)
-                        cqcc_loss = criterion(moutputs, labels)
-                        score = F.softmax(outputs, dim=1)[:, 0]
-                        testlossDict[args.add_loss].append(cqcc_loss.item())
-                    elif args.add_loss in ["isolate", "iso_sq"]:
-                        isoloss = iso_loss(feats, labels)
-                        score = torch.norm(feats - iso_loss.center, p=2, dim=1)
-                        testlossDict[args.add_loss].append(isoloss.item())
-                    elif args.add_loss == "ang_iso":
+                    if args.add_loss == "ang_iso":
                         ang_isoloss, score = ang_iso(feats, labels)
                         testlossDict[args.add_loss].append(ang_isoloss.item())
-                    elif args.add_loss == "multi_isolate":
-                        multi_isoloss = multi_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multi_isoloss.item())
-                    elif args.add_loss == "multicenter_isolate":
-                        multiisoloss = multicenter_iso_loss(feats, labels)
-                        testlossDict[args.add_loss].append(multiisoloss.item())
-
                     score_loader.append(score)
 
                     # desc_str = ''
