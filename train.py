@@ -31,11 +31,6 @@ def initParams():
     parser.add_argument("-p", "--path_to_protocol", type=str, help="protocol path",
                         default='/data/neil/DS_10283_3336/LA/ASVspoof2019_LA_cm_protocols/')
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
-    parser.add_argument("-e", "--path_to_external", type=str, help="external data for training",
-                        default="/dataNVME/neil/libriTTS/train-clean-360")
-
-    parser.add_argument("--ratio", type=float, default=1,
-                        help="ASVspoof ratio in a training batch, the other should be external genuine speech")
 
     # Dataset prepare
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
@@ -69,9 +64,7 @@ def initParams():
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
     parser.add_argument('--alpha', type=float, default=20, help="scale factor for angular isolate loss")
-    parser.add_argument('--num_centers', type=int, default=3, help="num of centers for multi isolate loss")
 
-    parser.add_argument('--visualize', action='store_true', help="feature visualization")
     parser.add_argument('--test_only', action='store_true', help="test the trained model in case the test crash sometimes or another test method")
     parser.add_argument('--continue_training', action='store_true', help="continue training with trained model")
 
@@ -79,11 +72,10 @@ def initParams():
                         help="whether to use device_adversarial in training")
     parser.add_argument('--device_aug', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_augmentation in training")
-    parser.add_argument('--lambda_', type=float, default=0.1, help="lambda for gradient reversal layer")
+    parser.add_argument('--lambda_', type=float, default=0.05, help="lambda for gradient reversal layer")
     parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
     parser.add_argument('--pre_train', action='store_true', help="whether to pretrain the model")
-    parser.add_argument('--add_genuine', action='store_true', help="whether to iterate through genuine part multiple times")
     parser.add_argument('--test_on_eval', action='store_true',
                         help="whether to run EER on the evaluation set")
 
@@ -203,19 +195,6 @@ def train(args):
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
                                shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
 
-    if args.add_genuine:
-        training_genuine = ASVspoof2019(args.access_type, args.path_to_features, 'train',
-                                        args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding, genuine_only=True)
-        trainGenDataLoader = DataLoader(training_genuine, batch_size=int(args.batch_size * args.ratio), shuffle=True,
-                                        num_workers=args.num_workers, collate_fn=training_genuine.collate_fn)
-    if args.ratio < 1:
-        libri_set_train = LibriGenuine(args.path_to_external, part="train", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
-        libri_set_dev = LibriGenuine(args.path_to_external, part="dev", feature=args.feat, feat_len=args.feat_len, padding=args.padding)
-
-        libriDataLoader_train = DataLoader(libri_set_train, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
-                                           shuffle=True, num_workers=args.num_workers)
-        libriDataLoader_dev = DataLoader(libri_set_dev, batch_size=(args.batch_size - int(args.batch_size * args.ratio)),
-                                           shuffle=True, num_workers=args.num_workers)
     test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
@@ -228,40 +207,6 @@ def train(args):
         criterion = nn.BCEWithLogitsLoss()
     else:
         assert False
-
-    if args.add_loss == "center":
-        centerLoss = CenterLoss(2, args.enc_dim).to(args.device)
-        centerLoss.train()
-        center_optimzer = torch.optim.SGD(centerLoss.parameters(), lr=0.5)
-
-    if args.add_loss == "lgm":
-        lgm_loss = LGMLoss_v0(2, args.enc_dim, 1.0).to(args.device)
-        lgm_loss.train()
-        lgm_optimzer = torch.optim.SGD(lgm_loss.parameters(), lr=0.1)
-
-    if args.add_loss == "lgcl":
-        lgcl_loss = LMCL_loss(2, args.enc_dim, s=args.alpha, m=args.r_real).to(args.device)
-        lgcl_loss.train()
-        lgcl_optimzer = torch.optim.SGD(lgcl_loss.parameters(), lr=0.01)
-
-    if args.add_loss == "isolate":
-        iso_loss = IsolateLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
-        if args.continue_training:
-            iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
-        iso_loss.train()
-        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=args.lr)
-
-    if args.add_loss == "iso_sq":
-        iso_loss = IsolateSquareLoss(2, args.enc_dim, r_real=args.r_real, r_fake=args.r_fake).to(args.device)
-        if args.continue_training:
-            iso_loss = torch.load(os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt')).to(args.device)
-        iso_loss.train()
-        iso_optimzer = torch.optim.SGD(iso_loss.parameters(), lr=args.lr)
-
-    if args.add_loss == "ang_iso":
-        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
-        ang_iso.train()
-        ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
 
     early_stop_cnt = 0
     prev_loss = 1e8
@@ -379,21 +324,7 @@ def train(args):
                     log.write(str(epoch_num) + "\t" + str(i) + "\t" +
                               str(trainlossDict[monitor_loss][-1]) + "\n")
 
-        if args.visualize and ((epoch_num+1) % 3 == 1):
-            feat = torch.cat(ip1_loader, 0)
-            labels = torch.cat(idx_loader, 0)
-            tags = torch.cat(tag_loader, 0)
-            if args.add_loss in ["isolate", "iso_sq"]:
-                centers = iso_loss.center
-            elif args.add_loss == "ang_iso":
-                centers = ang_iso.center
-            else:
-                centers = torch.mean(feat[labels == 0], dim=0, keepdim=True)
-            visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
-                      epoch_num + 1, "Train")
-        # print(len(what))
-        # print(len(list(set(what))))
-        # assert len(what) == len(list(set(what)))
+
         # Val the model
         # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
         cqcc_model.eval()
@@ -406,12 +337,6 @@ def train(args):
                 if args.device_adv or args.device_aug:
                     if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
                 cqcc = cqcc.transpose(2,3).to(args.device)
-
-                if args.ratio < 1:
-                    featTensor, _, _ = next(iter(libriDataLoader_dev))
-                    cqcc = torch.cat((cqcc, featTensor.transpose(2, 3)), 0)
-                    tags = torch.cat((tags, torch.zeros(add_size, dtype=tags.dtype)), 0)
-                    labels = torch.cat((labels, torch.zeros(add_size, dtype=labels.dtype)), 0)
 
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
@@ -431,20 +356,7 @@ def train(args):
                 idx_loader.append((labels))
                 tag_loader.append((tags))
 
-                if args.add_loss in [None]:
-                    devlossDict["base_loss"].append(cqcc_loss.item())
-                elif args.add_loss in ["lgm", "center"]:
-                    devlossDict[args.add_loss].append(cqcc_loss.item())
-                elif args.add_loss == "lgcl":
-                    outputs, moutputs = lgcl_loss(feats, labels)
-                    cqcc_loss = criterion(moutputs, labels)
-                    score = F.softmax(outputs, dim=1)[:, 0]
-                    devlossDict[args.add_loss].append(cqcc_loss.item())
-                elif args.add_loss in ["isolate", "iso_sq"]:
-                    isoloss = iso_loss(feats, labels)
-                    score = torch.norm(feats - iso_loss.center, p=2, dim=1)
-                    devlossDict[args.add_loss].append(isoloss.item())
-                elif args.add_loss == "ang_iso":
+                if args.add_loss == "ang_iso":
                     ang_isoloss, score = ang_iso(feats, labels)
                     devlossDict[args.add_loss].append(ang_isoloss.item())
                     if epoch_num > 0 and args.device_adv:
@@ -484,17 +396,6 @@ def train(args):
                               str(eer) +"\n")
             print("Val EER: {}".format(eer))
 
-            if args.visualize and ((epoch_num+1) % 3 == 1):
-                feat = torch.cat(ip1_loader, 0)
-                tags = torch.cat(tag_loader, 0)
-                if args.add_loss == "isolate":
-                    centers = iso_loss.center
-                elif args.add_loss == "ang_iso":
-                    centers = ang_iso.center
-                else:
-                    centers = torch.mean(feat[labels==0], dim=0, keepdim=True)
-                visualize(args, feat.data.cpu().numpy(), tags.data.cpu().numpy(), labels.data.cpu().numpy(), centers.data.cpu().numpy(),
-                          epoch_num + 1, "Dev")
 
         if args.test_on_eval:
             with torch.no_grad():
@@ -564,24 +465,8 @@ def train(args):
         if (epoch_num + 1) % 1 == 0:
             torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint',
                                                 'anti-spoofing_cqcc_model_%d.pt' % (epoch_num + 1)))
-            if args.add_loss == "center":
-                loss_model = centerLoss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss in ["isolate", "iso_sq"]:
-                loss_model = iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "ang_iso":
+            if args.add_loss == "ang_iso":
                 loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "lgm":
-                loss_model = lgm_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
-                                                    'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             else:
@@ -590,20 +475,8 @@ def train(args):
         if valLoss < prev_loss:
             # Save the model checkpoint
             torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
-            if args.add_loss == "center":
-                loss_model = centerLoss
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss in ["isolate", "iso_sq"]:
-                loss_model = iso_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "ang_iso":
+            if args.add_loss == "ang_iso":
                 loss_model = ang_iso
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "lgm":
-                loss_model = lgm_loss
-                torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
-            elif args.add_loss == "lgcl":
-                loss_model = lgcl_loss
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             else:
                 loss_model = None
@@ -641,7 +514,7 @@ if __name__ == "__main__":
     #     # res_file.write('\nTrain EER: %8.5f min-tDCF: %8.5f\n' % (TReer_cm, TRmin_tDCF))
     #     # res_file.write('\nVal EER: %8.5f min-tDCF: %8.5f\n' % (VAeer_cm, VAmin_tDCF))
     #     res_file.write('\nTest EER: %8.5f min-tDCF: %8.5f\n' % (TEeer_cm, TEmin_tDCF))
-    plot_loss(args)
+
 
     # # Test a checkpoint model
     # args = initParams()
