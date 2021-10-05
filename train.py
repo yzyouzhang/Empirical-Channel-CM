@@ -6,7 +6,7 @@ import json
 import shutil
 import numpy as np
 from model import *
-from dataset import ASVspoof2019, LibriGenuine
+from dataset import ASVspoof2019
 from torch.utils.data import DataLoader
 from evaluate_tDCF_asvspoof19 import compute_eer_and_tdcf
 from loss import *
@@ -80,9 +80,6 @@ def initParams():
                         help="whether to run EER on the evaluation set")
 
     args = parser.parse_args()
-
-    # Check ratio
-    assert (args.ratio > 0) and (args.ratio <= 1)
 
     # Change this to specify GPU
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -190,7 +187,7 @@ def train(args):
                                                           part="dev",
                                                           feature=args.feat, feat_len=args.feat_len,
                                                           pad_chop=args.pad_chop, padding=args.padding)
-    trainDataLoader = DataLoader(training_set, batch_size=int(args.batch_size * args.ratio),
+    trainDataLoader = DataLoader(training_set, batch_size=args.batch_size,
                                  shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
                                shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
@@ -215,7 +212,6 @@ def train(args):
 
     early_stop_cnt = 0
     prev_loss = 1e8
-    add_size = args.batch_size - int(args.batch_size * args.ratio)
 
     if args.add_loss is None:
         monitor_loss = 'base_loss'
@@ -229,8 +225,6 @@ def train(args):
         devlossDict = defaultdict(list)
         testlossDict = defaultdict(list)
         adjust_learning_rate(args, args.lr, cqcc_optimizer, epoch_num)
-        if args.add_loss == "isolate":
-            adjust_learning_rate(args, args.lr, iso_optimzer, epoch_num)
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, args.lr, ang_iso_optimzer, epoch_num)
         if args.device_adv:
