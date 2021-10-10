@@ -70,7 +70,7 @@ class ASVspoof2019(Dataset):
 
 class VCC2020(Dataset):
     def __init__(self, path_to_features="/data2/neil/VCC2020/", feature='LFCC',
-                 feat_len=750, padding='repeat'):
+                 feat_len=750, padding='repeat', genuine_only=False):
         super(VCC2020, self).__init__()
         self.ptf = path_to_features
         self.feat_len = feat_len
@@ -81,9 +81,12 @@ class VCC2020(Dataset):
                     "T20": 40, "T21": 41, "T22": 42, "T23": 43, "T24": 44, "T25": 45, "T26": 46, "T27": 47, "T28": 48, "T29": 49,
                     "T30": 50, "T31": 51, "T32": 52, "T33": 53, "TAR": 54}
         self.label = {"spoof": 1, "bonafide": 0}
+        self.genuine_only = genuine_only
         self.all_files = librosa.util.find_files(os.path.join(self.ptf, self.feature), ext="pt")
 
     def __len__(self):
+        if self.genuine_only:
+            return 220
         return len(self.all_files)
 
     def __getitem__(self, idx):

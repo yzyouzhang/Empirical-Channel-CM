@@ -13,7 +13,7 @@ from loss import *
 from collections import defaultdict
 from tqdm import tqdm, trange
 import random
-from utils import *
+from test import *
 import eval_metrics as em
 
 torch.set_default_tensor_type(torch.FloatTensor)
@@ -130,13 +130,13 @@ def adjust_learning_rate(args, lr, optimizer, epoch_num):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def shuffle(cqcc, tags, labels):
+def shuffle(feat, tags, labels):
     shuffle_index = torch.randperm(labels.shape[0])
-    cqcc = cqcc[shuffle_index]
+    feat = feat[shuffle_index]
     tags = tags[shuffle_index]
     labels = labels[shuffle_index]
     # this_len = this_len[shuffle_index]
-    return cqcc, tags, labels
+    return feat, tags, labels
 
 def train(args):
     torch.set_default_tensor_type(torch.FloatTensor)
@@ -144,14 +144,14 @@ def train(args):
     # initialize model
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
-        cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
+        feat = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
     elif args.model == 'lcnn':
-        cqcc_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
+        feat_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
 
     if args.continue_training:
-        cqcc_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')).to(args.device)
-    # cqcc_model = nn.DataParallel(cqcc_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
-    cqcc_optimizer = torch.optim.Adam(cqcc_model.parameters(), lr=args.lr,
+        feat_model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt')).to(args.device)
+    # feat_model = nn.DataParallel(feat_model, list(range(torch.cuda.device_count())))  # for multiple GPUs
+    feat_optimizer = torch.optim.Adam(feat_model.parameters(), lr=args.lr,
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
@@ -203,11 +203,11 @@ def train(args):
 
     for epoch_num in tqdm(range(args.num_epochs)):
         genuine_feats, ip1_loader, tag_loader, idx_loader = [], [], [], []
-        cqcc_model.train()
+        feat_model.train()
         trainlossDict = defaultdict(list)
         devlossDict = defaultdict(list)
         testlossDict = defaultdict(list)
-        adjust_learning_rate(args, args.lr, cqcc_optimizer, epoch_num)
+        adjust_learning_rate(args, args.lr, feat_optimizer, epoch_num)
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, args.lr, ang_iso_optimzer, epoch_num)
         if args.MT_AUG or args.ADV_AUG:
@@ -215,24 +215,24 @@ def train(args):
         print('\nEpoch: %d ' % (epoch_num + 1))
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
-        for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
+        for i, (feat, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
             if args.AUG or args.MT_AUG or args.ADV_AUG:
                 if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
-            cqcc = cqcc.transpose(2,3).to(args.device)
+            feat = feat.transpose(2,3).to(args.device)
             tags = tags.to(args.device)
             labels = labels.to(args.device)
-            feats, cqcc_outputs = cqcc_model(cqcc)
-            cqcc_loss = criterion(cqcc_outputs, labels)
-            trainlossDict['base_loss'].append(cqcc_loss.item())
+            feats, feat_outputs = feat_model(feat)
+            feat_loss = criterion(feat_outputs, labels)
+            trainlossDict['base_loss'].append(feat_loss.item())
 
             if args.add_loss == None:
-                cqcc_optimizer.zero_grad()
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
+                feat_optimizer.zero_grad()
+                feat_loss.backward()
+                feat_optimizer.step()
 
             if args.add_loss == "ang_iso":
                 ang_isoloss, _ = ang_iso(feats, labels)
-                cqcc_loss = ang_isoloss * args.weight_loss
+                feat_loss = ang_isoloss * args.weight_loss
                 if epoch_num > 0 and (args.MT_AUG or args.ADV_AUG):
                     channel = channel.to(args.device)
                     classifier_out = classifier(feats)
@@ -240,18 +240,18 @@ def train(args):
                     total_m += channel.size(0)
                     correct_m += (predicted == channel).sum().item()
                     device_loss = criterion(classifier_out, channel)
-                    cqcc_loss += device_loss
+                    feat_loss += device_loss
                     trainlossDict["adv_loss"].append(device_loss.item())
-                cqcc_optimizer.zero_grad()
+                feat_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
                 trainlossDict[args.add_loss].append(ang_isoloss.item())
-                cqcc_loss.backward()
-                cqcc_optimizer.step()
+                feat_loss.backward()
+                feat_optimizer.step()
                 ang_iso_optimzer.step()
 
             if (args.MT_AUG or args.ADV_AUG):
                 channel = channel.to(args.device)
-                feats, _ = cqcc_model(cqcc)
+                feats, _ = feat_model(feat)
                 feats = feats.detach()
                 classifier_out = classifier(feats)
                 _, predicted = torch.max(classifier_out.data, 1)
@@ -282,26 +282,26 @@ def train(args):
 
         # Val the model
         # eval mode (batchnorm uses moving mean/variance instead of mini-batch mean/variance)
-        cqcc_model.eval()
+        feat_model.eval()
         with torch.no_grad():
             ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
             # with trange(2) as v:
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
-            for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
+            for i, (feat, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
                 if args.AUG or args.MT_AUG or args.ADV_AUG:
                     if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
-                cqcc = cqcc.transpose(2,3).to(args.device)
+                feat = feat.transpose(2,3).to(args.device)
 
                 tags = tags.to(args.device)
                 labels = labels.to(args.device)
 
-                cqcc, tags, labels = shuffle(cqcc, tags, labels)
+                feat, tags, labels = shuffle(feat, tags, labels)
 
-                feats, cqcc_outputs = cqcc_model(cqcc)
+                feats, feat_outputs = feat_model(feat)
 
-                cqcc_loss = criterion(cqcc_outputs, labels)
-                score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                feat_loss = criterion(feat_outputs, labels)
+                score = F.softmax(feat_outputs, dim=1)[:, 0]
 
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
@@ -345,13 +345,13 @@ def train(args):
         if args.test_on_eval:
             with torch.no_grad():
                 ip1_loader, tag_loader, idx_loader, score_loader = [], [], [], []
-                for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(testDataLoader)):
-                    cqcc = cqcc.transpose(2,3).to(args.device)
+                for i, (feat, audio_fn, tags, labels, channel) in enumerate(tqdm(testDataLoader)):
+                    feat = feat.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
-                    feats, cqcc_outputs = cqcc_model(cqcc)
-                    cqcc_loss = criterion(cqcc_outputs, labels)
-                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                    feats, feat_outputs = feat_model(feat)
+                    feat_loss = criterion(feat_outputs, labels)
+                    score = F.softmax(feat_outputs, dim=1)[:, 0]
 
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
@@ -377,8 +377,8 @@ def train(args):
         # if args.add_loss == "isolate":
         #     print("isolate center: ", iso_loss.center.data)
         if (epoch_num + 1) % 1 == 0:
-            torch.save(cqcc_model, os.path.join(args.out_fold, 'checkpoint',
-                                                'anti-spoofing_cqcc_model_%d.pt' % (epoch_num + 1)))
+            torch.save(feat_model, os.path.join(args.out_fold, 'checkpoint',
+                                                'anti-spoofing_feat_model_%d.pt' % (epoch_num + 1)))
             if args.add_loss == "ang_iso":
                 loss_model = ang_iso
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
@@ -388,7 +388,7 @@ def train(args):
 
         if valLoss < prev_loss:
             # Save the model checkpoint
-            torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
+            torch.save(feat_model, os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt'))
             if args.add_loss == "ang_iso":
                 loss_model = ang_iso
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
@@ -404,11 +404,11 @@ def train(args):
                 res_file.write('\nTrained Epochs: %d\n' % (epoch_num - 499))
             break
         # if early_stop_cnt == 1:
-        #     torch.save(cqcc_model, os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt')
+        #     torch.save(feat_model, os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt')
 
-            # print('Dev Accuracy of the model on the val features: {} % '.format(100 * cqcc_correct / total))
+            # print('Dev Accuracy of the model on the val features: {} % '.format(100 * feat_correct / total))
 
-    return cqcc_model, loss_model
+    return feat_model, loss_model
 
 
 
@@ -416,7 +416,7 @@ if __name__ == "__main__":
     args = initParams()
     if not args.test_only:
         _, _ = train(args)
-    # model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_cqcc_model.pt'))
+    # model = torch.load(os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt'))
     # if args.add_loss is None:
     #     loss_model = None
     # else:
@@ -432,6 +432,6 @@ if __name__ == "__main__":
 
     # # Test a checkpoint model
     # args = initParams()
-    # model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_cqcc_model_19.pt'))
+    # model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_feat_model_19.pt'))
     # loss_model = torch.load(os.path.join(args.out_fold, 'checkpoint', 'anti-spoofing_loss_model_19.pt'))
     # VAeer_cm, VAmin_tDCF = test(args, model, loss_model, "dev")
