@@ -36,13 +36,12 @@ def initParams():
     parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
                         choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
-    parser.add_argument('--pad_chop', type=str2bool, nargs='?', const=True, default=True, help="whether pad_chop in the dataset")
     parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'],
                         help="how to pad short utterance")
     parser.add_argument("--enc_dim", type=int, help="encoding dimension", default=256)
 
     parser.add_argument('-m', '--model', help='Model arch', default='resnet',
-                        choices=['cnn', 'resnet', 'lcnn', 'tdnn', 'lstm', 'rnn', 'cnn_lstm'])
+                        choices=['resnet', 'lcnn'])
 
     # Training hyperparameters
     parser.add_argument('--num_epochs', type=int, default=1000, help="Number of epochs for training")
@@ -123,8 +122,6 @@ def initParams():
     print('Cuda device available: ', args.cuda)
     args.device = torch.device("cuda" if args.cuda else "cpu")
 
-    print(args.pad_chop)
-
     return args
 
 def adjust_learning_rate(args, lr, optimizer, epoch_num):
@@ -147,8 +144,6 @@ def train(args):
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
         cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
-    elif args.model == 'cnn':
-        cqcc_model = ConvNet(num_classes = 2, num_nodes = 47232, enc_dim = 256).to(args.device)
     elif args.model == 'lcnn':
         cqcc_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
 
@@ -159,20 +154,20 @@ def train(args):
                                       betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
 
     training_set = ASVspoof2019(args.access_type, args.path_to_features, 'train',
-                                args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+                                args.feat, feat_len=args.feat_len, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
-                                  args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+                                  args.feat, feat_len=args.feat_len, padding=args.padding)
     if args.device_aug:
         training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
                                                         path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
                                                         part="train",
                                                         feature=args.feat, feat_len=args.feat_len,
-                                                        pad_chop=args.pad_chop, padding=args.padding)
+                                                        padding=args.padding)
         validation_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
                                                           path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
                                                           part="dev",
                                                           feature=args.feat, feat_len=args.feat_len,
-                                                          pad_chop=args.pad_chop, padding=args.padding)
+                                                          padding=args.padding)
     if args.device_adv:
         training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
                                                         path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
@@ -186,13 +181,14 @@ def train(args):
                                                           path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
                                                           part="dev",
                                                           feature=args.feat, feat_len=args.feat_len,
-                                                          pad_chop=args.pad_chop, padding=args.padding)
+                                                          padding=args.padding)
     trainDataLoader = DataLoader(training_set, batch_size=args.batch_size,
                                  shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
                                shuffle=True, num_workers=args.num_workers, collate_fn=validation_set.collate_fn)
 
-    test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
+    test_set = ASVspoof2019(args.access_type, args.path_to_features, "eval", args.feat,
+                            feat_len=args.feat_len, padding=args.padding)
     testDataLoader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=test_set.collate_fn)
 
     feat, _, _, _, _ = training_set[23]
