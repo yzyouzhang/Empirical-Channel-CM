@@ -173,7 +173,7 @@ def test_on_ASVspoof2015(feat_model_path, loss_model_path, part, add_loss, add_e
     score_loader, idx_loader = [], []
 
     with open(os.path.join(dir_path, 'checkpoint_cm_score_VCC.txt'), 'w') as cm_score_file:
-        for i, (lfcc, audio_fn, tags, labels) in enumerate(tqdm(testDataLoader)):
+        for i, (lfcc, audio_fn, tags, labels, _) in enumerate(tqdm(testDataLoader)):
             lfcc = lfcc.transpose(2,3).to(device)
             tags = tags.to(device)
             labels = labels.to(device)
@@ -242,9 +242,8 @@ if __name__ == "__main__":
     model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
     # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
-    eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
-    # eer = test_model_on_PA(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
-    print(eer)
+    # eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    # print(eer)
     eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
     print(eer)
     # eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
