@@ -56,7 +56,6 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--base_loss', type=str, default="ce", choices=["ce", "bce"], help="use which loss for basic training")
     parser.add_argument('--add_loss', type=str, default="ang_iso",
                         choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
@@ -67,10 +66,12 @@ def initParams():
     parser.add_argument('--test_only', action='store_true', help="test the trained model in case the test crash sometimes or another test method")
     parser.add_argument('--continue_training', action='store_true', help="continue training with trained model")
 
-    parser.add_argument('--device_adv', type=str2bool, nargs='?', const=True, default=False,
-                        help="whether to use device_adversarial in training")
-    parser.add_argument('--device_aug', type=str2bool, nargs='?', const=True, default=False,
+    parser.add_argument('--AUG', type=str2bool, nargs='?', const=True, default=False,
                         help="whether to use device_augmentation in training")
+    parser.add_argument('--MT_AUG', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use device_multitask_augmentation in training")
+    parser.add_argument('--ADV_AUG', type=str2bool, nargs='?', const=True, default=False,
+                        help="whether to use device_adversarial_augmentation in training")
     parser.add_argument('--lambda_', type=float, default=0.05, help="lambda for gradient reversal layer")
     parser.add_argument('--lr_d', type=float, default=0.0001, help="learning rate")
 
@@ -143,7 +144,7 @@ def train(args):
     # initialize model
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
-        cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=1 if args.base_loss == "bce" else 2).to(args.device)
+        cqcc_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
     elif args.model == 'lcnn':
         cqcc_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
 
@@ -157,7 +158,7 @@ def train(args):
                                 args.feat, feat_len=args.feat_len, padding=args.padding)
     validation_set = ASVspoof2019(args.access_type, args.path_to_features, 'dev',
                                   args.feat, feat_len=args.feat_len, padding=args.padding)
-    if args.device_aug:
+    if args.AUG or args.MT_AUG or args.ADV_AUG:
         training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
                                                         path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
                                                         part="train",
@@ -168,20 +169,11 @@ def train(args):
                                                           part="dev",
                                                           feature=args.feat, feat_len=args.feat_len,
                                                           padding=args.padding)
-    if args.device_adv:
-        training_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
-                                                        path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
-                                                        part="train",
-                                                        feature=args.feat, feat_len=args.feat_len, pad_chop=args.pad_chop, padding=args.padding)
-        # grl = GradientReversal(args.lambda_)
-        classifier = ChannelClassifier(args.enc_dim, len(training_set.devices)+1, args.lambda_).to(args.device)
+    if args.MT_AUG or args.ADV_AUG:
+        classifier = ChannelClassifier(args.enc_dim, len(training_set.devices)+1, args.lambda_, ADV=args.ADV_AUG).to(args.device)
         classifier_optimizer = torch.optim.Adam(classifier.parameters(), lr=args.lr_d,
                                                 betas=(args.beta_1, args.beta_2), eps=args.eps, weight_decay=0.0005)
-        validation_set = ASVspoof2019LA_DeviceAdversarial(path_to_features="/data2/neil/ASVspoof2019LA/",
-                                                          path_to_deviced="/dataNVME/neil/ASVspoof2019LADevice",
-                                                          part="dev",
-                                                          feature=args.feat, feat_len=args.feat_len,
-                                                          padding=args.padding)
+
     trainDataLoader = DataLoader(training_set, batch_size=args.batch_size,
                                  shuffle=True, num_workers=args.num_workers, collate_fn=training_set.collate_fn)
     valDataLoader = DataLoader(validation_set, batch_size=args.batch_size,
@@ -194,12 +186,7 @@ def train(args):
     feat, _, _, _, _ = training_set[23]
     print("Feature shape", feat.shape)
 
-    if args.base_loss == "ce":
-        criterion = nn.CrossEntropyLoss()
-    elif args.base_loss == "bce":
-        criterion = nn.BCEWithLogitsLoss()
-    else:
-        assert False
+    criterion = nn.CrossEntropyLoss()
 
     if args.add_loss == "ang_iso":
         ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
@@ -223,27 +210,19 @@ def train(args):
         adjust_learning_rate(args, args.lr, cqcc_optimizer, epoch_num)
         if args.add_loss == "ang_iso":
             adjust_learning_rate(args, args.lr, ang_iso_optimzer, epoch_num)
-        if args.device_adv:
+        if args.MT_AUG or args.ADV_AUG:
             adjust_learning_rate(args, args.lr_d, classifier_optimizer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
         correct_m, total_m, correct_c, total_c, correct_v, total_v = 0, 0, 0, 0, 0, 0
 
         for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(trainDataLoader)):
-            if args.device_adv or args.device_aug:
+            if args.AUG or args.MT_AUG or args.ADV_AUG:
                 if i > int(len(training_set) / args.batch_size / (len(training_set.devices) + 1)): break
             cqcc = cqcc.transpose(2,3).to(args.device)
-
             tags = tags.to(args.device)
             labels = labels.to(args.device)
-            # this_len = this_len.to(args.device)
-
             feats, cqcc_outputs = cqcc_model(cqcc)
-
-            if args.base_loss == "bce":
-                cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-            else:
-                cqcc_loss = criterion(cqcc_outputs, labels)
-
+            cqcc_loss = criterion(cqcc_outputs, labels)
             trainlossDict['base_loss'].append(cqcc_loss.item())
 
             if args.add_loss == None:
@@ -254,17 +233,14 @@ def train(args):
             if args.add_loss == "ang_iso":
                 ang_isoloss, _ = ang_iso(feats, labels)
                 cqcc_loss = ang_isoloss * args.weight_loss
-                if epoch_num > 0 and args.device_adv:
+                if epoch_num > 0 and (args.MT_AUG or args.ADV_AUG):
                     channel = channel.to(args.device)
-                    # feats = grl(feats)
                     classifier_out = classifier(feats)
                     _, predicted = torch.max(classifier_out.data, 1)
                     total_m += channel.size(0)
                     correct_m += (predicted == channel).sum().item()
                     device_loss = criterion(classifier_out, channel)
-                    # print(cqcc_loss.item())
                     cqcc_loss += device_loss
-                    # print(device_loss.item())
                     trainlossDict["adv_loss"].append(device_loss.item())
                 cqcc_optimizer.zero_grad()
                 ang_iso_optimzer.zero_grad()
@@ -273,11 +249,10 @@ def train(args):
                 cqcc_optimizer.step()
                 ang_iso_optimzer.step()
 
-            if args.device_adv:
+            if (args.MT_AUG or args.ADV_AUG):
                 channel = channel.to(args.device)
                 feats, _ = cqcc_model(cqcc)
                 feats = feats.detach()
-                # feats = grl(feats)
                 classifier_out = classifier(feats)
                 _, predicted = torch.max(classifier_out.data, 1)
                 total_c += channel.size(0)
@@ -292,7 +267,7 @@ def train(args):
             tag_loader.append((tags))
 
 
-            if epoch_num > 0 and args.device_adv:
+            if epoch_num > 0 and (args.MT_AUG or args.ADV_AUG):
                 with open(os.path.join(args.out_fold, "train_loss.log"), "a") as log:
                     log.write(str(epoch_num) + "\t" + str(i) + "\t" +
                               str(trainlossDict["adv_loss"][-1]) + "\t" +
@@ -314,7 +289,7 @@ def train(args):
             # with trange(len(valDataLoader)) as v:
             #     for i in v:
             for i, (cqcc, audio_fn, tags, labels, channel) in enumerate(tqdm(valDataLoader)):
-                if args.device_adv or args.device_aug:
+                if args.AUG or args.MT_AUG or args.ADV_AUG:
                     if i > int(len(validation_set) / args.batch_size / (len(validation_set.devices) + 1)): break
                 cqcc = cqcc.transpose(2,3).to(args.device)
 
@@ -325,12 +300,8 @@ def train(args):
 
                 feats, cqcc_outputs = cqcc_model(cqcc)
 
-                if args.base_loss == "bce":
-                    cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-                    score = cqcc_outputs[:, 0]
-                else:
-                    cqcc_loss = criterion(cqcc_outputs, labels)
-                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                cqcc_loss = criterion(cqcc_outputs, labels)
+                score = F.softmax(cqcc_outputs, dim=1)[:, 0]
 
                 ip1_loader.append(feats)
                 idx_loader.append((labels))
@@ -339,9 +310,8 @@ def train(args):
                 if args.add_loss == "ang_iso":
                     ang_isoloss, score = ang_iso(feats, labels)
                     devlossDict[args.add_loss].append(ang_isoloss.item())
-                    if epoch_num > 0 and args.device_adv:
+                    if epoch_num > 0 and (args.MT_AUG or args.ADV_AUG):
                         channel = channel.to(args.device)
-                        # feats = grl(feats)
                         classifier_out = classifier(feats)
                         _, predicted = torch.max(classifier_out.data, 1)
                         total_v += channel.size(0)
@@ -351,18 +321,13 @@ def train(args):
 
                 score_loader.append(score)
 
-                # desc_str = ''
-                # for key in sorted(devlossDict.keys()):
-                #     desc_str += key + ':%.5f' % (np.nanmean(devlossDict[key])) + ', '
-                # # v.set_description(desc_str)
-                # print(desc_str)
             scores = torch.cat(score_loader, 0).data.cpu().numpy()
             labels = torch.cat(idx_loader, 0).data.cpu().numpy()
             eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]
             other_eer = em.compute_eer(-scores[labels == 0], -scores[labels == 1])[0]
             eer = min(eer, other_eer)
 
-            if epoch_num > 0 and args.device_adv:
+            if epoch_num > 0 and (args.MT_AUG or args.ADV_AUG):
                 with open(os.path.join(args.out_fold, "dev_loss.log"), "a") as log:
                     log.write(str(epoch_num) + "\t"+ "\t" +
                               str(np.nanmean(devlossDict["adv_loss"])) + "\t" +
@@ -384,15 +349,9 @@ def train(args):
                     cqcc = cqcc.transpose(2,3).to(args.device)
                     tags = tags.to(args.device)
                     labels = labels.to(args.device)
-
                     feats, cqcc_outputs = cqcc_model(cqcc)
-
-                    if args.base_loss == "bce":
-                        cqcc_loss = criterion(cqcc_outputs, labels.unsqueeze(1).float())
-                        score = cqcc_outputs[:, 0]
-                    else:
-                        cqcc_loss = criterion(cqcc_outputs, labels)
-                        score = F.softmax(cqcc_outputs, dim=1)[:, 0]
+                    cqcc_loss = criterion(cqcc_outputs, labels)
+                    score = F.softmax(cqcc_outputs, dim=1)[:, 0]
 
                     ip1_loader.append(feats)
                     idx_loader.append((labels))
@@ -403,11 +362,6 @@ def train(args):
                         testlossDict[args.add_loss].append(ang_isoloss.item())
                     score_loader.append(score)
 
-                    # desc_str = ''
-                    # for key in sorted(testlossDict.keys()):
-                    #     desc_str += key + ':%.5f' % (np.nanmean(testlossDict[key])) + ', '
-                    # # v.set_description(desc_str)
-                    # print(desc_str)
                 scores = torch.cat(score_loader, 0).data.cpu().numpy()
                 labels = torch.cat(idx_loader, 0).data.cpu().numpy()
                 eer = em.compute_eer(scores[labels == 0], scores[labels == 1])[0]

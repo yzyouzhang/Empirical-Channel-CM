@@ -75,7 +75,6 @@ class VCC2020(Dataset):
         self.ptf = path_to_features
         self.feat_len = feat_len
         self.feature = feature
-        self.pad_chop = pad_chop
         self.padding = padding
         self.tag = {"-": 0, "SOU": 20, "T01": 21, "T02": 22, "T03": 23, "T04": 24, "T05": 25, "T06": 26, "T07": 27, "T08": 28, "T09": 29,
                     "T10": 30, "T11": 31, "T12": 32, "T13": 33, "T14": 34, "T15": 35, "T16": 36, "T17": 37, "T18": 38, "T19": 39,
@@ -122,7 +121,6 @@ class ASVspoof2015(Dataset):
         self.ptf = os.path.join(path_to_features, self.part)
         self.feat_len = feat_len
         self.feature = feature
-        self.pad_chop = pad_chop
         self.padding = padding
         self.tag = {"human": 0, "S1": 1, "S2": 2, "S3": 3, "S4": 4, "S5": 5,
                     "S6": 6, "S7": 7, "S8": 8, "S9": 9, "S10": 10}
@@ -171,7 +169,6 @@ class ASVspoof2019LA_DeviceAdversarial(Dataset):
         self.ptf = os.path.join(path_to_features, part)
         self.feat_len = feat_len
         self.feature = feature
-        self.pad_chop = pad_chop
         self.padding = padding
         self.tag = {"-": 0, "A01": 1, "A02": 2, "A03": 3, "A04": 4, "A05": 5, "A06": 6, "A07": 7, "A08": 8, "A09": 9,
                     "A10": 10, "A11": 11, "A12": 12, "A13": 13, "A14": 14, "A15": 15, "A16": 16, "A17": 17, "A18": 18,
