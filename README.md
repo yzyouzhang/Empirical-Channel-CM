@@ -11,20 +11,20 @@ Existing datasets:
 
 
 Augmented data:
-ASVspoof2019LA-Sim
+[ASVspoof2019LA-Sim](https://zenodo.org/record/5548622)
 
 ###  Channel Robust Strategies
 Run the training code
-```angular2html
-python3 
+```
+python3 train.py -o /path/to/output/the/model
 ```
 The options:
 
+--AUG use the plain augmentation
 
-Thanks for your interest in our work!
+--MT_AUG use the multitask augmentation
 
-The code is currently not very organized. We will put more details here and also release the dataset we augmented with a link here.
-Stay tuned!
+--ADV_AUG use the adversarial augmentation
 
 The code is based on our previous work "One-class Learning Towards Synthetic Voice Spoofing Detection" [[code link](https://github.com/yzyouzhang/AIR-ASVspoof)]
 
