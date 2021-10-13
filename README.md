@@ -1,6 +1,8 @@
 # Empirical-Channel-CM
 
 ## An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems
+This repository contains our implementation of the paper, "An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems".
+[Paper link here](https://www.isca-speech.org/archive/interspeech_2021/zhang21ea_interspeech.html)
 
 ### Cross-Dataset Studies
 Existing datasets:
@@ -35,7 +37,7 @@ The options for testing on different dataset:
 
 ASVspoof2019LA, ASVspoof2015, VCC2020, ASVspoof2019LASim
 
-The code is based on our previous work "One-class Learning Towards Synthetic Voice Spoofing Detection" [[code link](https://github.com/yzyouzhang/AIR-ASVspoof)]
+The code is based on our previous work "One-class Learning Towards Synthetic Voice Spoofing Detection" [[code link](https://github.com/yzyouzhang/AIR-ASVspoof)] [[paper link](https://ieeexplore.ieee.org/document/9417604)]
 
 
 ### Citation
@@ -52,4 +54,4 @@ The code is based on our previous work "One-class Learning Towards Synthetic Voi
 
 Please also feel free to check out our follow-up work:
 
-[1] Chen, X., Zhang, Y., Zhu, G., Duan, Z. (2021) UR Channel-Robust Synthetic Speech Detection System for ASVspoof 2021. Proc. 2021 Edition of the Automatic Speaker Verification and Spoofing Countermeasures Challenge, 75-82, doi: 10.21437/ASVSPOOF.2021-12 [[link](https://www.isca-speech.org/archive/pdfs/asvspoof_2021/chen21_asvspoof.pdf)]
+[1] Chen, X., Zhang, Y., Zhu, G., Duan, Z. (2021) UR Channel-Robust Synthetic Speech Detection System for ASVspoof 2021. Proc. 2021 Edition of the Automatic Speaker Verification and Spoofing Countermeasures Challenge, 75-82, doi: 10.21437/ASVSPOOF.2021-12 [[link](https://www.isca-speech.org/archive/pdfs/asvspoof_2021/chen21_asvspoof.pdf)] [[code](https://github.com/yzyouzhang/ASVspoof2021_AIR)]
