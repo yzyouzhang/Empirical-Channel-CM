@@ -43,8 +43,24 @@ def setup_seed(random_seed, cudnn_deterministic=True):
         torch.backends.cudnn.deterministic = cudnn_deterministic
         torch.backends.cudnn.benchmark = False
 
+def init():
+    parser = argparse.ArgumentParser("load model scores")
+    parser.add_argument('-m', '--model_dir', type=str, help="directory for pretrained model",
+                        default='/data3/neil/chan/adv1010')
+    parser.add_argument("-t", "--task", type=str, help="which dataset you would like to test on",
+                        required=True, default='ASVspoof2019LA', choices=["ASVspoof2019LA", "ASVspoof2015", "VCC2020"])
+    parser.add_argument('-l', '--loss', help='loss for scoring', default="ocsoftmax",
+                        required=False, choices=[None, "ocsoftmax", "amsoftmax", "p2sgrad"])
+    parser.add_argument("--gpu", type=str, help="GPU index", default="0")
+    args = parser.parse_args()
 
-def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_genuine=False):
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+    args.cuda = torch.cuda.is_available()
+    args.device = torch.device("cuda" if args.cuda else "cpu")
+
+    return args
+
+def test_model(feat_model_path, loss_model_path, part, add_loss):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -53,7 +69,6 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_ge
         dir_path = dirname(feat_model_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = torch.load(feat_model_path)
-    # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
     test_set = ASVspoof2019("LA", "/dataNVME/neil/ASVspoof2019LA/", part,
                             "LFCC", feat_len=750, padding="repeat")
@@ -97,12 +112,12 @@ def test_model(feat_model_path, loss_model_path, part, add_loss, add_external_ge
 
     return eer
 
-def test(model_dir, add_loss):
-    model_path = os.path.join(model_dir, "anti-spoofing_feat_model.pt")
-    loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    test_model(model_path, loss_model_path, "eval", add_loss)
+# def test(model_dir, add_loss):
+#     model_path = os.path.join(model_dir, "anti-spoofing_feat_model.pt")
+#     loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
+#     test_model(model_path, loss_model_path, "eval", add_loss)
 
-def test_on_VCC(feat_model_path, loss_model_path, part, add_loss, add_external_genuine=False):
+def test_on_VCC(feat_model_path, loss_model_path, part, add_loss):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -113,8 +128,6 @@ def test_on_VCC(feat_model_path, loss_model_path, part, add_loss, add_external_g
     model = torch.load(feat_model_path)
     # model = torch.nn.DataParallel(model, list(range(torch.cuda.device_count())))  # for multiple GPUs
     loss_model = torch.load(loss_model_path) if add_loss is not None else None
-    # test_set_LA = ASVspoof2019("LA", "/data2/neil/ASVspoof2019LA/", part,
-    #                                    "LFCC", feat_len=750, padding="repeat", genuine_only=False)
     test_set_VCC = VCC2020("/data2/neil/VCC2020/", "LFCC", feat_len=750, padding="repeat")
     testDataLoader = DataLoader(test_set_VCC, batch_size=4, shuffle=False, num_workers=0)
     model.eval()
@@ -155,7 +168,7 @@ def test_on_VCC(feat_model_path, loss_model_path, part, add_loss, add_external_g
 
     return eer
 
-def test_on_ASVspoof2015(feat_model_path, loss_model_path, part, add_loss, add_external_genuine=False):
+def test_on_ASVspoof2015(feat_model_path, loss_model_path, part, add_loss):
     dirname = os.path.dirname
     basename = os.path.splitext(os.path.basename(feat_model_path))[0]
     if "checkpoint" in dirname(feat_model_path):
@@ -238,16 +251,18 @@ if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     device = torch.device("cuda")
 
-    model_dir = "/data3/neil/chan/mt1010/"
-    model_path = os.path.join(model_dir, "anti-spoofing_cqcc_model.pt")
-    loss_model_path = os.path.join(model_dir, "anti-spoofing_loss_model.pt")
-    # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
-    # eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
-    # print(eer)
-    eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=False)
+    args = init()
+
+    model_path = os.path.join(args.model_dir, "anti-spoofing_cqcc_model.pt")
+    loss_model_path = os.path.join(args.model_dir, "anti-spoofing_loss_model.pt")
+
+    if args.task == "ASVspoof2019LA":
+        eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax")
+    elif args.task == "ASVspoof2015":
+        eer = test_on_ASVspoof2015(model_path, loss_model_path, "eval", "ocsoftmax")
+    elif args.task =="VCC2020":
+        eer = test_on_VCC(model_path, loss_model_path, "eval", "ocsoftmax")
+    else:
+        raise ValueError("Evaluation task unknown!")
     print(eer)
-    # eer_cm_lst = test_individual_attacks(os.path.join(model_dir, 'checkpoint_cm_score.txt'))
-    # print(eer_cm_lst)
-    # print(time.time() - start)
-    # eer = test_model(model_path, loss_model_path, "eval", "ocsoftmax", add_external_genuine=True)
-    # print(eer)
+
