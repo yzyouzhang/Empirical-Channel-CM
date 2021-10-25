@@ -33,8 +33,7 @@ def initParams():
     parser.add_argument("-o", "--out_fold", type=str, help="output folder", required=True, default='./models/try/')
 
     # Dataset prepare
-    parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC',
-                        choices=["CQCC", "LFCC", "MFCC", "STFT", "Melspec", "CQT", "LFB", "LFBB"])
+    parser.add_argument("--feat", type=str, help="which feature to use", default='LFCC')
     parser.add_argument("--feat_len", type=int, help="features length", default=750)
     parser.add_argument('--padding', type=str, default='repeat', choices=['zero', 'repeat', 'silence'],
                         help="how to pad short utterance")
@@ -56,8 +55,8 @@ def initParams():
     parser.add_argument("--gpu", type=str, help="GPU index", default="1")
     parser.add_argument('--num_workers', type=int, default=0, help="number of workers")
 
-    parser.add_argument('--add_loss', type=str, default="ang_iso",
-                        choices=[None, 'center', 'lgm', 'lgcl', 'isolate', 'iso_sq', 'ang_iso', 'multi_isolate', 'multicenter_isolate'], help="add other loss for one-class training")
+    parser.add_argument('--add_loss', type=str, default="ocsoftmax",
+                        choices=[None, 'ocsoftmax'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
     parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
     parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
@@ -143,7 +142,7 @@ def train(args):
 
     # initialize model
     if args.model == 'resnet':
-        node_dict = {"CQCC": 4, "LFCC": 3, "LFBB": 3, "Melspec": 6, "LFB": 6, "CQT": 8, "STFT": 11, "MFCC": 87}
+        node_dict = {"CQCC": 4, "LFCC": 3}
         feat = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
     elif args.model == 'lcnn':
         feat_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
@@ -188,10 +187,10 @@ def train(args):
 
     criterion = nn.CrossEntropyLoss()
 
-    if args.add_loss == "ang_iso":
-        ang_iso = AngularIsoLoss(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
-        ang_iso.train()
-        ang_iso_optimzer = torch.optim.SGD(ang_iso.parameters(), lr=args.lr)
+    if args.add_loss == "ocsoftmax":
+        ocsoftmax = OCSoftmax(args.enc_dim, r_real=args.r_real, r_fake=args.r_fake, alpha=args.alpha).to(args.device)
+        ocsoftmax.train()
+        ocsoftmax_optimzer = torch.optim.SGD(ocsoftmax.parameters(), lr=args.lr)
 
     early_stop_cnt = 0
     prev_loss = 1e8
@@ -208,8 +207,8 @@ def train(args):
         devlossDict = defaultdict(list)
         testlossDict = defaultdict(list)
         adjust_learning_rate(args, args.lr, feat_optimizer, epoch_num)
-        if args.add_loss == "ang_iso":
-            adjust_learning_rate(args, args.lr, ang_iso_optimzer, epoch_num)
+        if args.add_loss == "ocsoftmax":
+            adjust_learning_rate(args, args.lr, ocsoftmax_optimzer, epoch_num)
         if args.MT_AUG or args.ADV_AUG:
             adjust_learning_rate(args, args.lr_d, classifier_optimizer, epoch_num)
         print('\nEpoch: %d ' % (epoch_num + 1))
@@ -230,9 +229,9 @@ def train(args):
                 feat_loss.backward()
                 feat_optimizer.step()
 
-            if args.add_loss == "ang_iso":
-                ang_isoloss, _ = ang_iso(feats, labels)
-                feat_loss = ang_isoloss * args.weight_loss
+            if args.add_loss == "ocsoftmax":
+                ocsoftmaxloss, _ = ocsoftmax(feats, labels)
+                feat_loss = ocsoftmaxloss * args.weight_loss
                 if epoch_num > 0 and (args.MT_AUG or args.ADV_AUG):
                     channel = channel.to(args.device)
                     classifier_out = classifier(feats)
@@ -243,11 +242,11 @@ def train(args):
                     feat_loss += device_loss
                     trainlossDict["adv_loss"].append(device_loss.item())
                 feat_optimizer.zero_grad()
-                ang_iso_optimzer.zero_grad()
-                trainlossDict[args.add_loss].append(ang_isoloss.item())
+                ocsoftmax_optimzer.zero_grad()
+                trainlossDict[args.add_loss].append(ocsoftmaxloss.item())
                 feat_loss.backward()
                 feat_optimizer.step()
-                ang_iso_optimzer.step()
+                ocsoftmax_optimzer.step()
 
             if (args.MT_AUG or args.ADV_AUG):
                 channel = channel.to(args.device)
@@ -307,9 +306,9 @@ def train(args):
                 idx_loader.append((labels))
                 tag_loader.append((tags))
 
-                if args.add_loss == "ang_iso":
-                    ang_isoloss, score = ang_iso(feats, labels)
-                    devlossDict[args.add_loss].append(ang_isoloss.item())
+                if args.add_loss == "ocsoftmax":
+                    ocsoftmaxloss, score = ocsoftmax(feats, labels)
+                    devlossDict[args.add_loss].append(ocsoftmaxloss.item())
                     if epoch_num > 0 and (args.MT_AUG or args.ADV_AUG):
                         channel = channel.to(args.device)
                         classifier_out = classifier(feats)
@@ -357,9 +356,9 @@ def train(args):
                     idx_loader.append((labels))
                     tag_loader.append((tags))
 
-                    if args.add_loss == "ang_iso":
-                        ang_isoloss, score = ang_iso(feats, labels)
-                        testlossDict[args.add_loss].append(ang_isoloss.item())
+                    if args.add_loss == "ocsoftmax":
+                        ocsoftmaxloss, score = ocsoftmax(feats, labels)
+                        testlossDict[args.add_loss].append(ocsoftmaxloss.item())
                     score_loader.append(score)
 
                 scores = torch.cat(score_loader, 0).data.cpu().numpy()
@@ -379,8 +378,8 @@ def train(args):
         if (epoch_num + 1) % 1 == 0:
             torch.save(feat_model, os.path.join(args.out_fold, 'checkpoint',
                                                 'anti-spoofing_feat_model_%d.pt' % (epoch_num + 1)))
-            if args.add_loss == "ang_iso":
-                loss_model = ang_iso
+            if args.add_loss == "ocsoftmax":
+                loss_model = ocsoftmax
                 torch.save(loss_model, os.path.join(args.out_fold, 'checkpoint',
                                                     'anti-spoofing_loss_model_%d.pt' % (epoch_num + 1)))
             else:
@@ -389,8 +388,8 @@ def train(args):
         if valLoss < prev_loss:
             # Save the model checkpoint
             torch.save(feat_model, os.path.join(args.out_fold, 'anti-spoofing_feat_model.pt'))
-            if args.add_loss == "ang_iso":
-                loss_model = ang_iso
+            if args.add_loss == "ocsoftmax":
+                loss_model = ocsoftmax
                 torch.save(loss_model, os.path.join(args.out_fold, 'anti-spoofing_loss_model.pt'))
             else:
                 loss_model = None

@@ -2,7 +2,7 @@
 
 ## An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems
 This repository contains our implementation of the paper, "An Empirical Study on Channel Effects for Synthetic Voice Spoofing Countermeasure Systems".
-[Paper link here](https://www.isca-speech.org/archive/interspeech_2021/zhang21ea_interspeech.html)
+[[Paper link](https://www.isca-speech.org/archive/interspeech_2021/zhang21ea_interspeech.html)] [[arXiv](https://arxiv.org/pdf/2104.01320.pdf)] [[Video presentation](https://www.youtube.com/watch?v=t6qtehKer6w)] 
 
 ### Cross-Dataset Studies
 Existing datasets:
