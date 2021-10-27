@@ -58,8 +58,8 @@ def initParams():
     parser.add_argument('--add_loss', type=str, default="ocsoftmax",
                         choices=[None, 'ocsoftmax'], help="add other loss for one-class training")
     parser.add_argument('--weight_loss', type=float, default=1, help="weight for other loss")
-    parser.add_argument('--r_real', type=float, default=0.9, help="r_real for isolate loss")
-    parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for isolate loss")
+    parser.add_argument('--r_real', type=float, default=0.9, help="r_real for ocsoftmax loss")
+    parser.add_argument('--r_fake', type=float, default=0.2, help="r_fake for ocsoftmax loss")
     parser.add_argument('--alpha', type=float, default=20, help="scale factor for angular isolate loss")
 
     parser.add_argument('--test_only', action='store_true', help="test the trained model in case the test crash sometimes or another test method")
@@ -143,7 +143,7 @@ def train(args):
     # initialize model
     if args.model == 'resnet':
         node_dict = {"CQCC": 4, "LFCC": 3}
-        feat = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
+        feat_model = ResNet(node_dict[args.feat], args.enc_dim, resnet_type='18', nclasses=2).to(args.device)
     elif args.model == 'lcnn':
         feat_model = LCNN(4, args.enc_dim, nclasses=2).to(args.device)
 
