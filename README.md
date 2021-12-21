@@ -13,7 +13,10 @@ Existing datasets:
 
 
 Augmented data:
-[ASVspoof2019LA-Sim](https://zenodo.org/record/5548622)
+
+Training + Development: [ASVspoof2019LA-Sim v1.0](https://zenodo.org/record/5548622) 
+
+Evaluation: [ASVspoof2019LA-Sim v1.1](https://zenodo.org/record/5794671)
 
 ###  Channel Robust Strategies
 
