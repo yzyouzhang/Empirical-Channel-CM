@@ -57,4 +57,4 @@ The code is based on our previous work "One-class Learning Towards Synthetic Voi
 
 Please also feel free to check out our follow-up work:
 
-[1] Chen, X., Zhang, Y., Zhu, G., Duan, Z. (2021) UR Channel-Robust Synthetic Speech Detection System for ASVspoof 2021. Proc. 2021 Edition of the Automatic Speaker Verification and Spoofing Countermeasures Challenge, 75-82, doi: 10.21437/ASVSPOOF.2021-12 [[link](https://www.isca-speech.org/archive/pdfs/asvspoof_2021/chen21_asvspoof.pdf)] [[code](https://github.com/yzyouzhang/ASVspoof2021_AIR)]
+[1] Chen, X., Zhang, Y., Zhu, G., Duan, Z. (2021) UR Channel-Robust Synthetic Speech Detection System for ASVspoof 2021. Proc. 2021 Edition of the Automatic Speaker Verification and Spoofing Countermeasures Challenge, 75-82, doi: 10.21437/ASVSPOOF.2021-12 [[link](https://www.isca-speech.org/archive/pdfs/asvspoof_2021/chen21_asvspoof.pdf)] [[code](https://github.com/yzyouzhang/ASVspoof2021_AIR)] [[video](https://www.youtube.com/watch?v=-wKMOTp8Tt0)]
